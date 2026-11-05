@@ -1,0 +1,6 @@
+{
+  "name": "Flaxy Free Fire Tournament Platform",
+  "description": "Premier competitive Free Fire esports tournament platform with live room scheduling, automated countdowns, manual UPI verification, user dashboard, duo teams, and advanced CMS admin controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
