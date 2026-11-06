@@ -1,6 +1,7 @@
 // Flaxy Esports API Client & Helper Library
 
-const API_BASE = '/api';
+const customApiUrl = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = customApiUrl ? `${customApiUrl.replace(/\/$/, '')}/api` : '/api';
 
 export function getToken(): string | null {
   return localStorage.getItem('flaxy_auth_token');
