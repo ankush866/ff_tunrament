@@ -7,14 +7,32 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
-  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [settings, setSettings] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('flaxy_site_settings') || '{}');
+    } catch {
+      return {};
+    }
+  });
   const [footerNav, setFooterNav] = useState<any[]>([]);
   const [istTime, setIstTime] = useState<string>('');
 
   useEffect(() => {
-    apiRequest<{ settings: Record<string, string> }>('/settings/public')
-      .then(res => setSettings(res.settings || {}))
-      .catch(() => {});
+    const loadSettings = () => {
+      apiRequest<{ settings: Record<string, string> }>('/settings/public')
+        .then(res => {
+          if (res.settings) {
+            setSettings(res.settings);
+            try {
+              localStorage.setItem('flaxy_site_settings', JSON.stringify(res.settings));
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadSettings();
+    window.addEventListener('flaxy_settings_updated', loadSettings);
 
     apiRequest<{ items: any[] }>('/cms/navigation')
       .then(res => {
@@ -29,7 +47,10 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
     };
     updateClock();
     const interval = setInterval(updateClock, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('flaxy_settings_updated', loadSettings);
+    };
   }, []);
 
   const handleNav = (url: string) => {

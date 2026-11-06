@@ -136,23 +136,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // 4. Forgot Password Request
+  // 4. Forgot Password Request (Accepts Email, Username, or Free Fire UID)
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
     setLoading(true);
     try {
-      const res = await apiRequest<{ success: boolean; message: string; demo_reset_token?: string }>('/auth/forgot-password', {
+      const res = await apiRequest<{ success: boolean; message: string; demo_reset_token?: string; otp_code?: string; username?: string }>('/auth/forgot-password', {
         method: 'POST',
-        body: JSON.stringify({ email: forgotEmail.trim() })
+        body: JSON.stringify({ identifier: forgotEmail.trim(), email: forgotEmail.trim() })
       });
       setSuccessMsg(res.message);
-      if (res.demo_reset_token) {
-        setDemoResetToken(res.demo_reset_token);
+      const code = res.otp_code || res.demo_reset_token;
+      if (code) {
+        setDemoResetToken(code);
+        setResetToken(code);
+        setTimeout(() => {
+          setMode('reset');
+        }, 800);
       }
     } catch (err: any) {
-      setError(err.message || 'Unable to process reset request.');
+      setError(err.message || 'Unable to process reset request. Please check your username, email, or UID.');
     } finally {
       setLoading(false);
     }
@@ -572,20 +577,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {mode === 'forgot' && (
             <form onSubmit={handleForgotSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Registered Email Address
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Registered Email, Username, or FF UID</span>
+                  <span className="text-[10px] text-orange-400 font-normal">Any 1 of these</span>
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                  <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
                   <input
-                    type="email"
+                    type="text"
                     required
-                    placeholder="your_email@example.com"
+                    placeholder="Enter email, username, or Free Fire UID"
                     value={forgotEmail}
                     onChange={e => setForgotEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none"
                   />
                 </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  💡 If you don't remember your email, you can simply type your **Username** or **Free Fire UID**!
+                </p>
               </div>
 
               <button
@@ -593,7 +602,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 disabled={loading}
                 className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-gaming font-bold rounded-xl transition-all disabled:opacity-50 text-sm tracking-wider"
               >
-                {loading ? 'CHECKING EMAIL...' : 'GET 6-DIGIT RESET OTP'}
+                {loading ? 'VERIFYING ACCOUNT...' : 'GET 6-DIGIT RESET CODE'}
               </button>
 
               {demoResetToken && (
@@ -683,6 +692,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               >
                 {loading ? 'UPDATING PASSWORD...' : 'SET NEW PASSWORD'}
               </button>
+
+              <div className="pt-2 text-center text-xs text-slate-400">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setMode('login');
+                  }}
+                  className="text-orange-400 font-semibold hover:underline"
+                >
+                  Back to Sign In
+                </button>
+              </div>
             </form>
           )}
         </div>

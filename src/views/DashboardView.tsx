@@ -24,7 +24,11 @@ import {
   MessageSquare,
   KeyRound,
   Award,
-  Swords
+  Swords,
+  Camera,
+  Upload,
+  Sparkles,
+  Image as ImageIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime, formatISTTime, getTimeRemaining } from '../lib/api.js';
@@ -77,6 +81,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
   const [profileAvatar, setProfileAvatar] = useState(user?.avatar_url || '');
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
+
+  const PRESET_AVATARS = [
+    { name: 'Alok', url: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=200' },
+    { name: 'Chrono', url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200' },
+    { name: 'Kelly', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200' },
+    { name: 'Hayato', url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200' },
+    { name: 'Moco', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200' },
+    { name: 'Wukong', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200' },
+    { name: 'K (Booyah)', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200' },
+    { name: 'Tatsuya', url: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200' }
+  ];
+
+  const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Please choose a photo under 5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const base64 = uploadEvent.target?.result as string;
+      if (base64) {
+        setProfileAvatar(base64);
+        setProfileMsg('Photo selected! Click "SAVE PROFILE CHANGES" below to apply.');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Password Change
   const [currentPass, setCurrentPass] = useState('');
@@ -308,11 +341,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
       {/* Top Profile Strip */}
       <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <img
-            src={user.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
-            alt={user.username}
-            className="w-16 h-16 rounded-2xl object-cover border-2 border-orange-500/50 shadow-md shadow-orange-500/20"
-          />
+          <div
+            className="relative group cursor-pointer shrink-0"
+            onClick={() => setActiveTab('settings')}
+            title="Click to change your warrior profile photo"
+          >
+            <img
+              src={user.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
+              alt={user.username}
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-orange-500/50 shadow-md shadow-orange-500/20 group-hover:opacity-85 transition-opacity"
+            />
+            <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+              <Camera className="w-5 h-5 text-orange-400" />
+            </div>
+            <span className="absolute -bottom-1 -right-1 p-1 bg-orange-500 rounded-lg text-white shadow border border-slate-900">
+              <Camera className="w-3 h-3" />
+            </span>
+          </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-gaming font-extrabold text-2xl text-white">
@@ -1296,14 +1341,101 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
                       className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none"
                     />
                   </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Avatar Image URL</label>
-                    <input
-                      type="url"
-                      value={profileAvatar}
-                      onChange={e => setProfileAvatar(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none"
-                    />
+                  {/* Photo & Avatar Customization Studio */}
+                  <div className="sm:col-span-2 p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      {/* Live Selected Photo Preview */}
+                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-orange-500 shadow-lg shadow-orange-500/20 shrink-0 bg-slate-900">
+                        <img
+                          src={profileAvatar || user?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
+                          alt="Profile Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+
+                      <div className="flex-1 space-y-2 text-center sm:text-left">
+                        <label className="block text-xs font-bold text-white flex items-center justify-center sm:justify-start gap-1.5">
+                          <Camera className="w-4 h-4 text-orange-400" />
+                          Profile Photo & Warrior Avatar
+                        </label>
+                        <p className="text-[11px] text-slate-400">
+                          Upload your photo directly from your device or pick a Free Fire character avatar.
+                        </p>
+
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                          {/* File Upload Button */}
+                          <label className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow">
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Upload Photo from Phone / PC</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handlePhotoFileUpload}
+                              className="hidden"
+                            />
+                          </label>
+
+                          {profileAvatar && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProfileAvatar('');
+                                setProfileMsg('Reset photo to default.');
+                              }}
+                              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Free Fire Character Avatars Grid */}
+                    <div className="pt-2 border-t border-slate-800/80">
+                      <div className="text-[11px] font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Or Select Free Fire Character Avatar:</span>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                        {PRESET_AVATARS.map((av) => (
+                          <button
+                            key={av.name}
+                            type="button"
+                            onClick={() => {
+                              setProfileAvatar(av.url);
+                              setProfileMsg(`Selected "${av.name}" avatar! Click Save below to apply.`);
+                            }}
+                            className={`group relative p-1 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                              profileAvatar === av.url
+                                ? 'border-orange-500 bg-orange-500/20 scale-105 shadow-md shadow-orange-500/30'
+                                : 'border-slate-800 hover:border-slate-700 bg-slate-900'
+                            }`}
+                          >
+                            <img
+                              src={av.url}
+                              alt={av.name}
+                              className="w-10 h-10 rounded-lg object-cover"
+                            />
+                            <span className="text-[9px] font-medium text-slate-300 truncate w-full text-center">
+                              {av.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Optional URL input */}
+                    <div className="pt-1">
+                      <label className="block text-[11px] text-slate-400 mb-1">Or paste image web link:</label>
+                      <input
+                        type="url"
+                        value={profileAvatar}
+                        onChange={e => setProfileAvatar(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
                   </div>
                 </div>
 

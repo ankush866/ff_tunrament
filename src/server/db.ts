@@ -6,9 +6,15 @@ import bcrypt from 'bcryptjs';
 const DB_PATH = path.resolve(process.cwd(), 'flaxy_tournament.db');
 const db = new DatabaseSync(DB_PATH);
 
-// Enable WAL mode for performance and concurrent readers
+// Ensure any previous WAL data is flushed into the main database file
+try {
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+} catch {}
+
+// Enable DELETE mode and FULL synchronous so every transaction is immediately and permanently committed to disk
 db.exec(`
-  PRAGMA journal_mode = WAL;
+  PRAGMA journal_mode = DELETE;
+  PRAGMA synchronous = FULL;
   PRAGMA foreign_keys = ON;
 `);
 
@@ -371,6 +377,12 @@ export function initDatabase() {
   }
 
   seedInitialData();
+
+  // Restore any persistent users and custom website settings from permanent store
+  restoreFromBackup();
+
+  // Keep backup in sync
+  syncDataBackup();
 }
 
 function seedInitialData() {
@@ -1139,6 +1151,106 @@ function seedInitialData() {
       ('Tonight 8:45 PM IST Clash Squad Bermuda Tournament is LIVE!', 'Slots filling fast! Join now and compete for the ₹3,500 prize pool.', 'urgent', 1, 1),
       ('Strict Mobile Verification Active', 'Emulators will be permanently banned. Play fair and respect competitive integrity.', 'info', 1, 1)
     `).run();
+  }
+}
+
+const PERMANENT_STORE_FILE = path.resolve(process.cwd(), 'flaxy_permanent_data.json');
+
+export interface StoredUser {
+  id?: number;
+  username: string;
+  email: string;
+  password_hash: string;
+  full_name: string;
+  free_fire_uid: string;
+  free_fire_ign: string;
+  phone: string;
+  avatar_url: string;
+  role: string;
+  is_email_verified: number;
+  is_blocked: number;
+  is_deactivated: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export function syncDataBackup() {
+  try {
+    const users = db.prepare('SELECT id, username, email, password_hash, full_name, free_fire_uid, free_fire_ign, phone, avatar_url, role, is_email_verified, is_blocked, is_deactivated, created_at, updated_at FROM users').all() as unknown as StoredUser[];
+    const settingsRows = db.prepare('SELECT key, value FROM website_settings').all() as { key: string; value: string }[];
+    const settings: Record<string, string> = {};
+    for (const s of settingsRows) {
+      settings[s.key] = s.value;
+    }
+    const data = {
+      version: 2,
+      last_updated: new Date().toISOString(),
+      users,
+      settings
+    };
+    fs.writeFileSync(PERMANENT_STORE_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error syncing permanent data backup:', err);
+  }
+}
+
+export function restoreFromBackup() {
+  try {
+    if (!fs.existsSync(PERMANENT_STORE_FILE)) {
+      return;
+    }
+    const raw = fs.readFileSync(PERMANENT_STORE_FILE, 'utf8');
+    const data = JSON.parse(raw);
+
+    // 1. Restore Custom Website Settings (WhatsApp, Email, UPI, phone, etc.)
+    if (data.settings && typeof data.settings === 'object') {
+      const upsertSetting = db.prepare(`
+        INSERT INTO website_settings (key, value, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+      `);
+      for (const [key, value] of Object.entries(data.settings)) {
+        upsertSetting.run(key, String(value));
+      }
+    }
+
+    // 2. Restore Registered Users
+    if (Array.isArray(data.users)) {
+      const insertUser = db.prepare(`
+        INSERT INTO users (username, email, password_hash, full_name, free_fire_uid, free_fire_ign, phone, avatar_url, role, is_email_verified, is_blocked, is_deactivated)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(username) DO UPDATE SET
+          password_hash = excluded.password_hash,
+          full_name = excluded.full_name,
+          free_fire_uid = excluded.free_fire_uid,
+          free_fire_ign = excluded.free_fire_ign,
+          phone = excluded.phone,
+          avatar_url = excluded.avatar_url,
+          role = excluded.role,
+          is_blocked = excluded.is_blocked,
+          is_deactivated = excluded.is_deactivated
+      `);
+
+      for (const u of data.users) {
+        if (!u.username || !u.email) continue;
+        insertUser.run(
+          u.username,
+          u.email,
+          u.password_hash,
+          u.full_name || '',
+          u.free_fire_uid || '',
+          u.free_fire_ign || '',
+          u.phone || '',
+          u.avatar_url || '',
+          u.role || 'user',
+          u.is_email_verified ?? 1,
+          u.is_blocked ?? 0,
+          u.is_deactivated ?? 0
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Error restoring from permanent backup:', err);
   }
 }
 

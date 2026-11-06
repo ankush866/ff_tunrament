@@ -35,7 +35,13 @@ function MainApp() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'admin_login'>('login');
   const [liveIstTime, setLiveIstTime] = useState('');
-  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [settings, setSettings] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('flaxy_site_settings') || '{}');
+    } catch {
+      return {};
+    }
+  });
   const [hasLiveTournament, setHasLiveTournament] = useState(false);
 
   // Live IST Clock
@@ -51,9 +57,21 @@ function MainApp() {
 
   // Public Settings & Live Tournament status
   useEffect(() => {
-    apiRequest<{ settings: Record<string, string> }>('/settings/public')
-      .then(res => setSettings(res.settings || {}))
-      .catch(() => {});
+    const loadSettings = () => {
+      apiRequest<{ settings: Record<string, string> }>('/settings/public')
+        .then(res => {
+          if (res.settings) {
+            setSettings(res.settings);
+            try {
+              localStorage.setItem('flaxy_site_settings', JSON.stringify(res.settings));
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadSettings();
+    window.addEventListener('flaxy_settings_updated', loadSettings);
 
     apiRequest<{ tournaments: any[] }>('/tournaments')
       .then(res => {
@@ -61,6 +79,10 @@ function MainApp() {
         setHasLiveTournament(live);
       })
       .catch(() => {});
+
+    return () => {
+      window.removeEventListener('flaxy_settings_updated', loadSettings);
+    };
   }, [currentView]);
 
   // Handle URL hash or initial route

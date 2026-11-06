@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'node:crypto';
-import { db } from './db.js';
+import { db, syncDataBackup } from './db.js';
 import {
   AuthUser,
   generateToken,
@@ -63,6 +63,8 @@ apiRouter.post('/auth/register', rateLimiter(60000, 15), (req: Request, res: Res
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (?, 'Welcome to Flaxy Esports!', 'Your warrior account is ready. Browse active tournaments and dominate the battleground.', 'system')
   `).run(user.id);
+
+  syncDataBackup();
 
   return res.json({ token, user });
 });
@@ -133,6 +135,8 @@ apiRouter.put('/auth/profile', requireAuth, (req: Request & { user?: AuthUser },
     FROM users WHERE id = ?
   `).get(req.user!.id);
 
+  syncDataBackup();
+
   return res.json({ user: updated });
 });
 
@@ -153,27 +157,31 @@ apiRouter.put('/auth/change-password', requireAuth, (req: Request & { user?: Aut
     req.user!.id
   );
 
+  syncDataBackup();
+
   return res.json({ success: true, message: 'Password updated successfully.' });
 });
 
-// Forgot Password Request
+// Forgot Password Request (Accepts Email, Username, or Free Fire UID)
 apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), (req: Request, res: Response) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: 'Please provide your registered email address.' });
+  const { identifier, email } = req.body;
+  const searchVal = String(identifier || email || '').trim().toLowerCase();
+
+  if (!searchVal) {
+    return res.status(400).json({ error: 'Please enter your registered Email, Username, or Free Fire UID.' });
   }
 
-  const user = db.prepare('SELECT id, email, username FROM users WHERE email = ?').get(email.trim().toLowerCase()) as { id: number; email: string; username: string } | undefined;
+  const user = db.prepare(`
+    SELECT id, email, username, free_fire_uid, free_fire_ign
+    FROM users
+    WHERE LOWER(email) = ? OR LOWER(username) = ? OR free_fire_uid = ?
+  `).get(searchVal, searchVal, searchVal) as { id: number; email: string; username: string; free_fire_uid: string; free_fire_ign: string } | undefined;
 
-  // Generic secure response (never reveal email existence)
   if (!user) {
-    return res.json({
-      success: true,
-      message: 'If the provided email address exists in our records, a secure password reset link has been dispatched.'
-    });
+    return res.status(404).json({ error: 'No player account found with that Email, Username, or Free Fire UID.' });
   }
 
-  // Generate single-use secure 6-digit OTP and token
+  // Generate single-use secure 6-digit OTP
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour validity
 
@@ -184,9 +192,11 @@ apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), (req: Request, r
 
   return res.json({
     success: true,
-    message: `Password reset OTP generated. Use the 6-digit verification code to reset your password.`,
+    message: `Account verified for "${user.username}"! Use your 6-digit reset code to create a new password.`,
     demo_reset_token: otpCode,
-    otp_code: otpCode
+    otp_code: otpCode,
+    username: user.username,
+    email: user.email ? user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : ''
   });
 });
 
@@ -194,13 +204,16 @@ apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), (req: Request, r
 apiRouter.post('/auth/reset-password', rateLimiter(60000, 10), (req: Request, res: Response) => {
   const { token, newPassword } = req.body;
   if (!token || !newPassword || newPassword.length < 6) {
-    return res.status(400).json({ error: 'Invalid verification code or password too short (min 6 chars).' });
+    return res.status(400).json({ error: 'Please enter the 6-digit code and a new password (minimum 6 characters).' });
   }
 
   const cleanToken = String(token).trim();
   const resetRecord = db.prepare(`
-    SELECT * FROM password_resets WHERE token = ? AND used = 0
-  `).get(cleanToken) as { id: number; user_id: number; expires_at: string; used: number } | undefined;
+    SELECT pr.*, u.username, u.email
+    FROM password_resets pr
+    JOIN users u ON u.id = pr.user_id
+    WHERE pr.token = ? AND pr.used = 0
+  `).get(cleanToken) as { id: number; user_id: number; expires_at: string; used: number; username: string; email: string } | undefined;
 
   if (!resetRecord) {
     return res.status(400).json({ error: 'Password reset code is invalid or has already been used.' });
@@ -215,7 +228,9 @@ apiRouter.post('/auth/reset-password', rateLimiter(60000, 10), (req: Request, re
   db.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`).run(passwordHash, resetRecord.user_id);
   db.prepare(`UPDATE password_resets SET used = 1 WHERE id = ?`).run(resetRecord.id);
 
-  return res.json({ success: true, message: 'Password has been reset successfully. You can now login.' });
+  syncDataBackup();
+
+  return res.json({ success: true, message: `Password reset successfully for ${resetRecord.username}! You can now login.` });
 });
 
 // Deactivate Account
@@ -1742,6 +1757,8 @@ apiRouter.put('/admin/settings', requireRole(['super_admin']), (req: Request & {
     upsert.run(key, String(value));
   }
 
+  syncDataBackup();
+
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'UPDATE_SETTINGS', 'Updated global website settings');
   return res.json({ success: true });
 });
@@ -1797,6 +1814,8 @@ apiRouter.put('/admin/users/:id', requireRole(['super_admin']), (req: Request & 
     WHERE id = ?
   `).run(role, is_blocked !== undefined ? (is_blocked ? 1 : 0) : null, id);
 
+  syncDataBackup();
+
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'UPDATE_USER', `Updated user #${id} permissions / status`);
   return res.json({ success: true });
 });
@@ -1810,6 +1829,9 @@ apiRouter.put('/admin/users/:id/reset-password', requireRole(['super_admin']), (
   }
   const passwordHash = hashPassword(passwordToSet);
   db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, id);
+
+  syncDataBackup();
+
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'RESET_USER_PASSWORD', `Admin reset password for user ID #${id}`);
   return res.json({ success: true, message: `Password for user #${id} has been reset successfully.` });
 });
