@@ -9,10 +9,10 @@ import { apiRouter } from './src/server/routes.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize DB and Seed Data
-initDatabase();
-
 async function startServer() {
+  // Initialize DB, Supabase schema and seed data
+  await initDatabase();
+
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   const isProd = process.env.NODE_ENV === 'production';
@@ -26,14 +26,14 @@ async function startServer() {
 
   // Health check
   app.get('/api/health', (req: Request, res: Response) => {
-    res.json({ status: 'ok', time: new Date().toISOString(), timezone: 'Asia/Kolkata' });
+    res.json({ status: 'ok', time: new Date().toISOString(), timezone: 'Asia/Kolkata', isPostgres: db.isPostgres });
   });
 
   // Dynamic Sitemap.xml Generator (Requirement 16)
-  app.get('/sitemap.xml', (req: Request, res: Response) => {
+  app.get('/sitemap.xml', async (req: Request, res: Response) => {
     try {
-      const pages = db.prepare('SELECT slug, updated_at FROM website_pages WHERE is_published = 1').all() as { slug: string; updated_at: string }[];
-      const tournaments = db.prepare('SELECT slug, updated_at FROM tournaments WHERE is_published = 1').all() as { slug: string; updated_at: string }[];
+      const pages = (await db.prepare('SELECT slug, updated_at FROM website_pages WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
+      const tournaments = (await db.prepare('SELECT slug, updated_at FROM tournaments WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
 
       const baseUrl = process.env.APP_URL || 'https://flaxy.gg';
 
@@ -89,10 +89,26 @@ async function startServer() {
     });
   }
 
+  // Global API error handler
+  app.use((err: any, req: Request, res: Response, next: any) => {
+    console.error('[API ERROR]:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message || 'Internal server error' });
+    }
+  });
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Flaxy Free Fire Tournament Server running on http://0.0.0.0:${PORT}`);
   });
 }
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[SERVER SAFETY] Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[SERVER SAFETY] Uncaught Exception:', err);
+});
 
 startServer().catch((err) => {
   console.error('Fatal server startup error:', err);

@@ -20,7 +20,7 @@ export const apiRouter = Router();
 // ==========================================
 
 // Register
-apiRouter.post('/auth/register', rateLimiter(60000, 15), (req: Request, res: Response) => {
+apiRouter.post('/auth/register', rateLimiter(60000, 15), async (req: Request, res: Response) => {
   const { username, email, password, full_name, free_fire_uid, free_fire_ign, phone } = req.body;
 
   if (!username || !email || !password) {
@@ -36,13 +36,13 @@ apiRouter.post('/auth/register', rateLimiter(60000, 15), (req: Request, res: Res
   }
 
   // Check unique username and email
-  const existingUser = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
+  const existingUser = await db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
   if (existingUser) {
     return res.status(400).json({ error: 'Username or email already registered. Please choose another.' });
   }
 
   const password_hash = hashPassword(password);
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO users (username, email, password_hash, full_name, free_fire_uid, free_fire_ign, phone, role, is_email_verified)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'user', 1)
   `).run(
@@ -55,11 +55,11 @@ apiRouter.post('/auth/register', rateLimiter(60000, 15), (req: Request, res: Res
     phone || ''
   );
 
-  const user = db.prepare('SELECT id, username, email, full_name, free_fire_uid, free_fire_ign, phone, avatar_url, role, is_blocked, is_deactivated, created_at FROM users WHERE id = ?').get(result.lastInsertRowid) as unknown as AuthUser;
+  const user = await db.prepare('SELECT id, username, email, full_name, free_fire_uid, free_fire_ign, phone, avatar_url, role, is_blocked, is_deactivated, created_at FROM users WHERE id = ?').get(result.lastInsertRowid) as unknown as AuthUser;
   const token = generateToken(user);
 
   // Send welcome in-app notification
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (?, 'Welcome to Flaxy Esports!', 'Your warrior account is ready. Browse active tournaments and dominate the battleground.', 'system')
   `).run(user.id);
@@ -70,7 +70,7 @@ apiRouter.post('/auth/register', rateLimiter(60000, 15), (req: Request, res: Res
 });
 
 // Login
-apiRouter.post('/auth/login', rateLimiter(60000, 20), (req: Request, res: Response) => {
+apiRouter.post('/auth/login', rateLimiter(60000, 20), async (req: Request, res: Response) => {
   const { usernameOrEmail, password } = req.body;
 
   if (!usernameOrEmail || !password) {
@@ -81,7 +81,7 @@ apiRouter.post('/auth/login', rateLimiter(60000, 20), (req: Request, res: Respon
     ? 'SELECT * FROM users WHERE email = ?'
     : 'SELECT * FROM users WHERE username = ?';
 
-  const user = db.prepare(query).get(usernameOrEmail.trim().toLowerCase()) as (AuthUser & { password_hash: string }) | undefined;
+  const user = (await db.prepare(query).get(usernameOrEmail.trim().toLowerCase())) as (AuthUser & { password_hash: string }) | undefined;
 
   if (!user) {
     return res.status(401).json({ error: 'Invalid username/email or password.' });
@@ -106,8 +106,8 @@ apiRouter.post('/auth/login', rateLimiter(60000, 20), (req: Request, res: Respon
 });
 
 // Current user profile
-apiRouter.get('/auth/me', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
-  const user = db.prepare(`
+apiRouter.get('/auth/me', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
+  const user = await db.prepare(`
     SELECT id, username, email, full_name, free_fire_uid, free_fire_ign, phone, avatar_url, role, is_email_verified, created_at
     FROM users WHERE id = ?
   `).get(req.user!.id);
@@ -115,9 +115,9 @@ apiRouter.get('/auth/me', requireAuth, (req: Request & { user?: AuthUser }, res:
 });
 
 // Update profile
-apiRouter.put('/auth/profile', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/auth/profile', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const { full_name, free_fire_uid, free_fire_ign, phone, avatar_url } = req.body;
-  db.prepare(`
+  await db.prepare(`
     UPDATE users
     SET full_name = ?, free_fire_uid = ?, free_fire_ign = ?, phone = ?, avatar_url = ?, updated_at = datetime('now')
     WHERE id = ?
@@ -130,7 +130,7 @@ apiRouter.put('/auth/profile', requireAuth, (req: Request & { user?: AuthUser },
     req.user!.id
   );
 
-  const updated = db.prepare(`
+  const updated = await db.prepare(`
     SELECT id, username, email, full_name, free_fire_uid, free_fire_ign, phone, avatar_url, role, is_email_verified, created_at
     FROM users WHERE id = ?
   `).get(req.user!.id);
@@ -141,18 +141,18 @@ apiRouter.put('/auth/profile', requireAuth, (req: Request & { user?: AuthUser },
 });
 
 // Change Password
-apiRouter.put('/auth/change-password', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/auth/change-password', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword || newPassword.length < 6) {
     return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
   }
 
-  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user!.id) as { password_hash: string };
+  const user = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user!.id) as { password_hash: string };
   if (!verifyPassword(currentPassword, user.password_hash)) {
     return res.status(400).json({ error: 'Current password is incorrect.' });
   }
 
-  db.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`).run(
+  await db.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`).run(
     hashPassword(newPassword),
     req.user!.id
   );
@@ -163,7 +163,7 @@ apiRouter.put('/auth/change-password', requireAuth, (req: Request & { user?: Aut
 });
 
 // Forgot Password Request (Accepts Email, Username, or Free Fire UID)
-apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), (req: Request, res: Response) => {
+apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), async (req: Request, res: Response) => {
   const { identifier, email } = req.body;
   const searchVal = String(identifier || email || '').trim().toLowerCase();
 
@@ -171,7 +171,7 @@ apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), (req: Request, r
     return res.status(400).json({ error: 'Please enter your registered Email, Username, or Free Fire UID.' });
   }
 
-  const user = db.prepare(`
+  const user = await db.prepare(`
     SELECT id, email, username, free_fire_uid, free_fire_ign
     FROM users
     WHERE LOWER(email) = ? OR LOWER(username) = ? OR free_fire_uid = ?
@@ -185,7 +185,7 @@ apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), (req: Request, r
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour validity
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO password_resets (user_id, token, expires_at)
     VALUES (?, ?, ?)
   `).run(user.id, otpCode, expiresAt);
@@ -201,14 +201,14 @@ apiRouter.post('/auth/forgot-password', rateLimiter(60000, 10), (req: Request, r
 });
 
 // Reset Password with Token or 6-Digit OTP
-apiRouter.post('/auth/reset-password', rateLimiter(60000, 10), (req: Request, res: Response) => {
+apiRouter.post('/auth/reset-password', rateLimiter(60000, 10), async (req: Request, res: Response) => {
   const { token, newPassword } = req.body;
   if (!token || !newPassword || newPassword.length < 6) {
     return res.status(400).json({ error: 'Please enter the 6-digit code and a new password (minimum 6 characters).' });
   }
 
   const cleanToken = String(token).trim();
-  const resetRecord = db.prepare(`
+  const resetRecord = await db.prepare(`
     SELECT pr.*, u.username, u.email
     FROM password_resets pr
     JOIN users u ON u.id = pr.user_id
@@ -225,8 +225,8 @@ apiRouter.post('/auth/reset-password', rateLimiter(60000, 10), (req: Request, re
 
   // Update password and invalidate token
   const passwordHash = hashPassword(newPassword);
-  db.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`).run(passwordHash, resetRecord.user_id);
-  db.prepare(`UPDATE password_resets SET used = 1 WHERE id = ?`).run(resetRecord.id);
+  await db.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`).run(passwordHash, resetRecord.user_id);
+  await db.prepare(`UPDATE password_resets SET used = 1 WHERE id = ?`).run(resetRecord.id);
 
   syncDataBackup();
 
@@ -234,14 +234,14 @@ apiRouter.post('/auth/reset-password', rateLimiter(60000, 10), (req: Request, re
 });
 
 // Deactivate Account
-apiRouter.post('/auth/deactivate', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/auth/deactivate', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const { confirmPassword } = req.body;
-  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user!.id) as { password_hash: string };
+  const user = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user!.id) as { password_hash: string };
   if (!verifyPassword(confirmPassword, user.password_hash)) {
     return res.status(400).json({ error: 'Password confirmation failed.' });
   }
 
-  db.prepare("UPDATE users SET is_deactivated = 1, updated_at = datetime('now') WHERE id = ?").run(req.user!.id);
+  await db.prepare("UPDATE users SET is_deactivated = 1, updated_at = datetime('now') WHERE id = ?").run(req.user!.id);
   return res.json({ success: true, message: 'Account deactivated.' });
 });
 
@@ -251,13 +251,13 @@ apiRouter.post('/auth/deactivate', requireAuth, (req: Request & { user?: AuthUse
 // ==========================================
 
 // Live Real-Time Public Statistics (Calculated dynamically from SQLite Database)
-apiRouter.get('/stats/public', (req: Request, res: Response) => {
-  const warriors = db.prepare("SELECT count(*) as count FROM users WHERE role = 'user' AND is_deactivated = 0").get() as { count: number };
-  const completed = db.prepare("SELECT count(*) as count FROM tournaments WHERE status = 'Completed'").get() as { count: number };
-  const activeMatches = db.prepare("SELECT count(*) as count FROM tournaments WHERE is_published = 1 AND status IN ('Live', 'Registration Open', 'Upcoming')").get() as { count: number };
-  const paymentsApproved = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'approved'").get() as { total: number };
-  const completedPrizePool = db.prepare("SELECT COALESCE(SUM(prize_pool), 0) as total FROM tournaments WHERE status = 'Completed'").get() as { total: number };
-  const activePrizePool = db.prepare("SELECT COALESCE(SUM(prize_pool), 0) as total FROM tournaments WHERE is_published = 1 AND status IN ('Live', 'Registration Open', 'Upcoming')").get() as { total: number };
+apiRouter.get('/stats/public', async (req: Request, res: Response) => {
+  const warriors = await db.prepare("SELECT count(*) as count FROM users WHERE role = 'user' AND is_deactivated = 0").get() as { count: number };
+  const completed = await db.prepare("SELECT count(*) as count FROM tournaments WHERE status = 'Completed'").get() as { count: number };
+  const activeMatches = await db.prepare("SELECT count(*) as count FROM tournaments WHERE is_published = 1 AND status IN ('Live', 'Registration Open', 'Upcoming')").get() as { count: number };
+  const paymentsApproved = await db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'approved'").get() as { total: number };
+  const completedPrizePool = await db.prepare("SELECT COALESCE(SUM(prize_pool), 0) as total FROM tournaments WHERE status = 'Completed'").get() as { total: number };
+  const activePrizePool = await db.prepare("SELECT COALESCE(SUM(prize_pool), 0) as total FROM tournaments WHERE is_published = 1 AND status IN ('Live', 'Registration Open', 'Upcoming')").get() as { total: number };
 
   const totalPayout = paymentsApproved.total > 0 ? paymentsApproved.total : completedPrizePool.total;
 
@@ -271,7 +271,7 @@ apiRouter.get('/stats/public', (req: Request, res: Response) => {
 });
 
 // List Public Tournaments
-apiRouter.get('/tournaments', (req: Request, res: Response) => {
+apiRouter.get('/tournaments', async (req: Request, res: Response) => {
   const { game_mode, status, map_name } = req.query;
   let query = 'SELECT * FROM tournaments WHERE is_published = 1';
   const params: any[] = [];
@@ -291,21 +291,21 @@ apiRouter.get('/tournaments', (req: Request, res: Response) => {
 
   query += " ORDER BY CASE status WHEN 'Live' THEN 1 WHEN 'Registration Open' THEN 2 WHEN 'Upcoming' THEN 3 ELSE 4 END, match_at ASC";
 
-  const tournaments = db.prepare(query).all(...params);
+  const tournaments = await db.prepare(query).all(...params);
   return res.json({ tournaments });
 });
 
 // Get Single Tournament with Room & Registration Status
-apiRouter.get('/tournaments/:id', (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.get('/tournaments/:id', async (req: Request & { user?: AuthUser }, res: Response) => {
   const tournamentId = req.params.id;
-  const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(tournamentId) as any;
+  const tournament = await db.prepare('SELECT * FROM tournaments WHERE id = ?').get(tournamentId) as any;
 
   if (!tournament) {
     return res.status(404).json({ error: 'Tournament not found.' });
   }
 
   // Get Room info (without credentials if unauthorized)
-  const room = db.prepare('SELECT id, opening_time, closing_time, match_start_time, status, is_published FROM rooms WHERE tournament_id = ?').get(tournamentId);
+  const room = await db.prepare('SELECT id, opening_time, closing_time, match_start_time, status, is_published FROM rooms WHERE tournament_id = ?').get(tournamentId);
 
   // Check current user registration status if logged in
   let registration: any = null;
@@ -319,7 +319,7 @@ apiRouter.get('/tournaments/:id', (req: Request & { user?: AuthUser }, res: Resp
   }
 
   // Registered players count
-  const regCount = db.prepare("SELECT count(*) as count FROM registrations WHERE tournament_id = ? AND payment_status != 'rejected'").get(tournamentId) as { count: number };
+  const regCount = await db.prepare("SELECT count(*) as count FROM registrations WHERE tournament_id = ? AND payment_status != 'rejected'").get(tournamentId) as { count: number };
 
   return res.json({
     tournament,
@@ -331,13 +331,13 @@ apiRouter.get('/tournaments/:id', (req: Request & { user?: AuthUser }, res: Resp
 });
 
 // Register for Tournament (Transaction-safe slot reservation)
-apiRouter.post('/tournaments/:id/register', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/tournaments/:id/register', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const tournamentId = parseInt(req.params.id, 10);
   const userId = req.user!.id;
   const { team_id } = req.body;
 
   // Verify tournament exists and is open
-  const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(tournamentId) as any;
+  const tournament = await db.prepare('SELECT * FROM tournaments WHERE id = ?').get(tournamentId) as any;
   if (!tournament) {
     return res.status(404).json({ error: 'Tournament not found.' });
   }
@@ -347,9 +347,21 @@ apiRouter.post('/tournaments/:id/register', requireAuth, (req: Request & { user?
   }
 
   // Check existing registration
-  const existingReg = db.prepare('SELECT id, payment_status FROM registrations WHERE tournament_id = ? AND user_id = ?').get(tournamentId, userId) as any;
-  if (existingReg && existingReg.payment_status !== 'rejected') {
-    return res.status(400).json({ error: 'You are already registered for this tournament.' });
+  const existingReg = await db.prepare('SELECT id, payment_status, slot_number FROM registrations WHERE tournament_id = ? AND user_id = ?').get(tournamentId, userId) as any;
+  if (existingReg) {
+    if (existingReg.payment_status === 'pending') {
+      return res.json({
+        success: true,
+        registrationId: existingReg.id,
+        slotNumber: existingReg.slot_number || 1,
+        paymentRequired: tournament.entry_fee > 0,
+        entryFee: tournament.entry_fee,
+        message: 'Resuming your registration payment.'
+      });
+    }
+    if (existingReg.payment_status === 'approved') {
+      return res.status(400).json({ error: 'You are already registered and confirmed for this tournament.' });
+    }
   }
 
   // Validate Duo requirement
@@ -358,7 +370,7 @@ apiRouter.post('/tournaments/:id/register', requireAuth, (req: Request & { user?
       return res.status(400).json({ error: 'Please select or create your 2-player Duo team to register.' });
     }
     // Verify user is in this team and team has exactly 2 members
-    const teamMemberCount = db.prepare("SELECT count(*) as count FROM team_members WHERE team_id = ? AND status = 'accepted'").get(team_id) as { count: number };
+    const teamMemberCount = await db.prepare("SELECT count(*) as count FROM team_members WHERE team_id = ? AND status = 'accepted'").get(team_id) as { count: number };
     if (teamMemberCount.count !== 2) {
       return res.status(400).json({ error: 'Duo tournament requires a team with exactly 2 accepted members.' });
     }
@@ -366,11 +378,11 @@ apiRouter.post('/tournaments/:id/register', requireAuth, (req: Request & { user?
 
   // Transaction-safe slot reservation
   try {
-    db.exec('BEGIN TRANSACTION');
+    await db.exec('BEGIN TRANSACTION');
 
-    const freshTournament = db.prepare('SELECT available_slots, total_slots, entry_fee FROM tournaments WHERE id = ?').get(tournamentId) as any;
+    const freshTournament = await db.prepare('SELECT available_slots, total_slots, entry_fee FROM tournaments WHERE id = ?').get(tournamentId) as any;
     if (freshTournament.available_slots <= 0) {
-      db.exec('ROLLBACK');
+      await db.exec('ROLLBACK');
       return res.status(400).json({ error: 'Tournament is already full! No slots remaining.' });
     }
 
@@ -378,20 +390,20 @@ apiRouter.post('/tournaments/:id/register', requireAuth, (req: Request & { user?
     const newSlots = freshTournament.available_slots - 1;
     const newStatus = newSlots === 0 ? 'Full' : tournament.status;
 
-    db.prepare("UPDATE tournaments SET available_slots = ?, status = ?, updated_at = datetime('now') WHERE id = ?").run(newSlots, newStatus, tournamentId);
+    await db.prepare("UPDATE tournaments SET available_slots = ?, status = ?, updated_at = datetime('now') WHERE id = ?").run(newSlots, newStatus, tournamentId);
 
     const slotNumber = freshTournament.total_slots - newSlots;
     const initialPaymentStatus = freshTournament.entry_fee === 0 ? 'approved' : 'pending';
 
-    const regResult = db.prepare(`
+    const regResult = await db.prepare(`
       INSERT INTO registrations (tournament_id, user_id, team_id, slot_number, payment_status)
       VALUES (?, ?, ?, ?, ?)
     `).run(tournamentId, userId, team_id || null, slotNumber, initialPaymentStatus);
 
-    db.exec('COMMIT');
+    await db.exec('COMMIT');
 
     // Notify user
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (?, 'Registration Slot Reserved!', ?, 'tournament')
     `).run(
@@ -409,13 +421,13 @@ apiRouter.post('/tournaments/:id/register', requireAuth, (req: Request & { user?
       entryFee: freshTournament.entry_fee
     });
   } catch (err: any) {
-    db.exec('ROLLBACK');
+    await db.exec('ROLLBACK');
     return res.status(500).json({ error: 'Registration failed due to server error: ' + err.message });
   }
 });
 
 // Admin Tournaments CRUD
-apiRouter.post('/admin/tournaments', requireRole(['super_admin', 'tournament_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/admin/tournaments', requireRole(['super_admin', 'tournament_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const {
     title,
     game_mode,
@@ -438,7 +450,7 @@ apiRouter.post('/admin/tournaments', requireRole(['super_admin', 'tournament_man
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now();
   const slots = parseInt(total_slots, 10) || 48;
 
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO tournaments (title, slug, banner_image, game_mode, map_name, entry_fee, prize_pool, total_slots, available_slots, reg_open_at, reg_close_at, match_at, rules_text, status, is_published)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
@@ -461,7 +473,7 @@ apiRouter.post('/admin/tournaments', requireRole(['super_admin', 'tournament_man
   // Auto-create room record for this tournament
   const roomOpen = new Date(new Date(match_at).getTime() - 15 * 60 * 1000).toISOString();
   const roomClose = new Date(new Date(match_at).getTime() + 45 * 60 * 1000).toISOString();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO rooms (tournament_id, room_id_code, room_password, opening_time, closing_time, match_start_time, status, is_published)
     VALUES (?, '', '', ?, ?, ?, 'scheduled', 1)
   `).run(result.lastInsertRowid, roomOpen, roomClose, match_at);
@@ -470,7 +482,7 @@ apiRouter.post('/admin/tournaments', requireRole(['super_admin', 'tournament_man
   return res.json({ success: true, tournamentId: result.lastInsertRowid });
 });
 
-apiRouter.put('/admin/tournaments/:id', requireRole(['super_admin', 'tournament_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/admin/tournaments/:id', requireRole(['super_admin', 'tournament_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const id = req.params.id;
   const {
     title,
@@ -489,7 +501,12 @@ apiRouter.put('/admin/tournaments/:id', requireRole(['super_admin', 'tournament_
     is_published
   } = req.body;
 
-  db.prepare(`
+  const existing = (await db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id)) as any;
+  if (!existing) {
+    return res.status(404).json({ error: 'Tournament not found.' });
+  }
+
+  await db.prepare(`
     UPDATE tournaments
     SET title = ?, game_mode = ?, map_name = ?, entry_fee = ?, prize_pool = ?,
         total_slots = ?, available_slots = ?, reg_open_at = ?, reg_close_at = ?,
@@ -497,20 +514,20 @@ apiRouter.put('/admin/tournaments/:id', requireRole(['super_admin', 'tournament_
         updated_at = datetime('now')
     WHERE id = ?
   `).run(
-    title,
-    game_mode,
-    map_name,
-    parseInt(entry_fee, 10) || 0,
-    parseInt(prize_pool, 10) || 0,
-    parseInt(total_slots, 10) || 48,
-    parseInt(available_slots, 10),
-    reg_open_at,
-    reg_close_at,
-    match_at,
-    rules_text || '',
-    banner_image,
-    status,
-    is_published ? 1 : 0,
+    title ?? existing.title,
+    game_mode ?? existing.game_mode,
+    map_name ?? existing.map_name,
+    entry_fee !== undefined ? (parseInt(entry_fee, 10) || 0) : existing.entry_fee,
+    prize_pool !== undefined ? (parseInt(prize_pool, 10) || 0) : existing.prize_pool,
+    total_slots !== undefined ? (parseInt(total_slots, 10) || 48) : existing.total_slots,
+    available_slots !== undefined ? parseInt(available_slots, 10) : existing.available_slots,
+    reg_open_at ?? existing.reg_open_at,
+    reg_close_at ?? existing.reg_close_at,
+    match_at ?? existing.match_at,
+    rules_text ?? existing.rules_text,
+    banner_image ?? existing.banner_image,
+    status ?? existing.status,
+    is_published !== undefined ? (is_published ? 1 : 0) : existing.is_published,
     id
   );
 
@@ -518,17 +535,17 @@ apiRouter.put('/admin/tournaments/:id', requireRole(['super_admin', 'tournament_
   return res.json({ success: true });
 });
 
-apiRouter.delete('/admin/tournaments/:id', requireRole(['super_admin']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.delete('/admin/tournaments/:id', requireRole(['super_admin']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const id = req.params.id;
-  db.prepare('DELETE FROM tournaments WHERE id = ?').run(id);
+  await db.prepare('DELETE FROM tournaments WHERE id = ?').run(id);
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'DELETE_TOURNAMENT', `Deleted tournament ID: ${id}`);
   return res.json({ success: true });
 });
 
 // Admin view registrations for a tournament
-apiRouter.get('/admin/tournaments/:id/registrations', requireRole(['super_admin', 'tournament_manager']), (req: Request, res: Response) => {
+apiRouter.get('/admin/tournaments/:id/registrations', requireRole(['super_admin', 'tournament_manager']), async (req: Request, res: Response) => {
   const tournamentId = req.params.id;
-  const registrations = db.prepare(`
+  const registrations = await db.prepare(`
     SELECT r.*, u.username, u.email, u.free_fire_ign, u.free_fire_uid, u.phone,
            t.name as team_name, p.transaction_ref, p.screenshot_url, p.status as payment_status_detail
     FROM registrations r
@@ -548,9 +565,9 @@ apiRouter.get('/admin/tournaments/:id/registrations', requireRole(['super_admin'
 // ==========================================
 
 // Get Room Information (Security Enforced: Only reveals credentials if authorized & time unlocked)
-apiRouter.get('/rooms/:tournamentId', (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.get('/rooms/:tournamentId', async (req: Request & { user?: AuthUser }, res: Response) => {
   const tournamentId = req.params.tournamentId;
-  const room = db.prepare('SELECT * FROM rooms WHERE tournament_id = ?').get(tournamentId) as any;
+  const room = await db.prepare('SELECT * FROM rooms WHERE tournament_id = ?').get(tournamentId) as any;
 
   if (!room) {
     return res.status(404).json({ error: 'Room schedule not found for this tournament.' });
@@ -579,7 +596,7 @@ apiRouter.get('/rooms/:tournamentId', (req: Request & { user?: AuthUser }, res: 
   // Security Check: Is user an approved participant?
   let isApprovedParticipant = false;
   if (req.user) {
-    const reg = db.prepare('SELECT id, payment_status FROM registrations WHERE tournament_id = ? AND user_id = ?').get(tournamentId, req.user.id) as any;
+    const reg = await db.prepare('SELECT id, payment_status FROM registrations WHERE tournament_id = ? AND user_id = ?').get(tournamentId, req.user.id) as any;
     if (reg && reg.payment_status === 'approved') {
       isApprovedParticipant = true;
     }
@@ -615,17 +632,17 @@ apiRouter.get('/rooms/:tournamentId', (req: Request & { user?: AuthUser }, res: 
 });
 
 // Admin Update Room Credentials & Scheduling
-apiRouter.post('/admin/rooms', requireRole(['super_admin', 'tournament_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/admin/rooms', requireRole(['super_admin', 'tournament_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const { tournament_id, room_id_code, room_password, opening_time, closing_time, match_start_time, status, is_published } = req.body;
 
   if (!tournament_id || !opening_time || !match_start_time) {
     return res.status(400).json({ error: 'Tournament, opening time, and match start time are required.' });
   }
 
-  const existing = db.prepare('SELECT id FROM rooms WHERE tournament_id = ?').get(tournament_id) as any;
+  const existing = await db.prepare('SELECT id FROM rooms WHERE tournament_id = ?').get(tournament_id) as any;
 
   if (existing) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE rooms
       SET room_id_code = ?, room_password = ?, opening_time = ?, closing_time = ?,
           match_start_time = ?, status = ?, is_published = ?, updated_at = datetime('now')
@@ -641,7 +658,7 @@ apiRouter.post('/admin/rooms', requireRole(['super_admin', 'tournament_manager']
       tournament_id
     );
   } else {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO rooms (tournament_id, room_id_code, room_password, opening_time, closing_time, match_start_time, status, is_published)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -661,7 +678,7 @@ apiRouter.post('/admin/rooms', requireRole(['super_admin', 'tournament_manager']
 });
 
 // Admin Reschedule Match (with auto-notifications to all players)
-apiRouter.put('/admin/rooms/:tournamentId/reschedule', requireRole(['super_admin', 'tournament_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/admin/rooms/:tournamentId/reschedule', requireRole(['super_admin', 'tournament_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const tournamentId = req.params.tournamentId;
   const { newOpeningTime, newMatchStartTime, reason } = req.body;
 
@@ -670,21 +687,21 @@ apiRouter.put('/admin/rooms/:tournamentId/reschedule', requireRole(['super_admin
   }
 
   // Update room
-  db.prepare(`
+  await db.prepare(`
     UPDATE rooms
     SET opening_time = ?, match_start_time = ?, status = 'scheduled', updated_at = datetime('now')
     WHERE tournament_id = ?
   `).run(newOpeningTime, newMatchStartTime, tournamentId);
 
   // Update tournament match time
-  db.prepare(`
+  await db.prepare(`
     UPDATE tournaments
     SET match_at = ?, updated_at = datetime('now')
     WHERE id = ?
   `).run(newMatchStartTime, tournamentId);
 
   // Notify all registered participants
-  const players = db.prepare('SELECT user_id FROM registrations WHERE tournament_id = ?').all(tournamentId) as { user_id: number }[];
+  const players = await db.prepare('SELECT user_id FROM registrations WHERE tournament_id = ?').all(tournamentId) as { user_id: number }[];
   const istMatchTime = new Date(newMatchStartTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
 
   const notifyStmt = db.prepare(`
@@ -693,7 +710,7 @@ apiRouter.put('/admin/rooms/:tournamentId/reschedule', requireRole(['super_admin
   `);
 
   for (const player of players) {
-    notifyStmt.run(
+    await notifyStmt.run(
       player.user_id,
       `Your tournament match has been rescheduled to ${istMatchTime} IST. ${reason ? 'Reason: ' + reason : ''}`
     );
@@ -709,27 +726,49 @@ apiRouter.put('/admin/rooms/:tournamentId/reschedule', requireRole(['super_admin
 // ==========================================
 
 // Submit UPI Payment
-apiRouter.post('/payments/submit', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/payments/submit', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const { registration_id, tournament_id, amount, transaction_ref, screenshot_url, upi_id, whatsapp_number } = req.body;
 
-  if (!registration_id || !tournament_id || !transaction_ref) {
-    return res.status(400).json({ error: 'Registration ID, tournament, and 12-digit UTR reference are required.' });
+  if (!tournament_id || !transaction_ref) {
+    return res.status(400).json({ error: 'Tournament and 12-digit UTR reference are required.' });
+  }
+
+  // Auto-resolve registration ID if not passed directly
+  let targetRegId = registration_id;
+  if (!targetRegId) {
+    const existingReg = await db.prepare('SELECT id FROM registrations WHERE tournament_id = ? AND user_id = ?').get(tournament_id, req.user!.id) as { id: number } | undefined;
+    if (existingReg) {
+      targetRegId = existingReg.id;
+    } else {
+      // Auto-create registration slot if none exists yet
+      const freshTournament = await db.prepare('SELECT available_slots, total_slots, entry_fee FROM tournaments WHERE id = ?').get(tournament_id) as any;
+      if (!freshTournament || freshTournament.available_slots <= 0) {
+        return res.status(400).json({ error: 'No slots available for this tournament.' });
+      }
+      const slotNum = freshTournament.total_slots - freshTournament.available_slots + 1;
+      const newReg = await db.prepare(`
+        INSERT INTO registrations (tournament_id, user_id, slot_number, payment_status)
+        VALUES (?, ?, ?, 'pending')
+      `).run(tournament_id, req.user!.id, slotNum);
+      await db.prepare('UPDATE tournaments SET available_slots = available_slots - 1 WHERE id = ?').run(tournament_id);
+      targetRegId = newReg.lastInsertRowid;
+    }
   }
 
   const cleanRef = transaction_ref.trim().toUpperCase();
 
   // Duplicate transaction reference check (Requirement 5)
-  const existingPayment = db.prepare('SELECT id FROM payments WHERE transaction_ref = ?').get(cleanRef);
+  const existingPayment = await db.prepare('SELECT id FROM payments WHERE transaction_ref = ?').get(cleanRef);
   if (existingPayment) {
     return res.status(400).json({ error: 'This Transaction/UTR Reference has already been submitted. Duplicate submissions are strictly prohibited.' });
   }
 
   try {
-    const payment = db.prepare(`
+    const payment = await db.prepare(`
       INSERT INTO payments (registration_id, user_id, tournament_id, amount, upi_id, transaction_ref, screenshot_url, whatsapp_number, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
     `).run(
-      registration_id,
+      targetRegId,
       req.user!.id,
       tournament_id,
       parseInt(amount, 10) || 0,
@@ -739,27 +778,44 @@ apiRouter.post('/payments/submit', requireAuth, (req: Request & { user?: AuthUse
       whatsapp_number || ''
     );
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE registrations
       SET payment_status = 'pending', updated_at = datetime('now')
       WHERE id = ?
-    `).run(registration_id);
+    `).run(targetRegId);
+
+    // Also update user's phone if whatsapp number is provided
+    if (whatsapp_number && String(whatsapp_number).trim()) {
+      await db.prepare("UPDATE users SET phone = COALESCE(NULLIF(phone, ''), ?), updated_at = datetime('now') WHERE id = ?").run(String(whatsapp_number).trim(), req.user!.id);
+    }
 
     // Notify user
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notifications (user_id, title, message, type)
-      VALUES (?, 'Payment Received (Pending Verification)', 'Your UPI transaction reference has been recorded. Our verification staff will review and approve your slot shortly.', 'payment')
+      VALUES (?, 'Payment Submitted For Approval', 'Your UPI UTR reference has been sent to the Admin Panel. Our verification staff will review and approve your slot shortly.', 'payment')
     `).run(req.user!.id);
 
-    return res.json({ success: true, paymentId: payment.lastInsertRowid });
+    // Notify staff
+    const staff = await db.prepare("SELECT id FROM users WHERE role IN ('super_admin', 'payment_manager', 'tournament_manager')").all() as { id: number }[];
+    const staffNotify = db.prepare(`
+      INSERT INTO notifications (user_id, title, message, type)
+      VALUES (?, 'New Payment Waiting for Verification', ?, 'payment')
+    `);
+    for (const s of staff) {
+      await staffNotify.run(s.id, `User ${req.user!.username} submitted UTR ${cleanRef} (₹${amount || 0}). Verify and approve in Payments tab.`);
+    }
+
+    syncDataBackup();
+
+    return res.json({ success: true, paymentId: payment.lastInsertRowid, message: 'Payment submitted for admin approval.' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to record payment: ' + err.message });
   }
 });
 
 // User's own payment history
-apiRouter.get('/payments/my', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
-  const payments = db.prepare(`
+apiRouter.get('/payments/my', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
+  const payments = await db.prepare(`
     SELECT p.*, t.title as tournament_title, t.match_at
     FROM payments p
     JOIN tournaments t ON t.id = p.tournament_id
@@ -771,12 +827,12 @@ apiRouter.get('/payments/my', requireAuth, (req: Request & { user?: AuthUser }, 
 });
 
 // User Matches History (Completed tournaments participated by user with rank & earned rewards)
-apiRouter.get('/user/matches', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.get('/user/matches', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const userId = req.user!.id;
   const username = req.user!.username;
   const ign = req.user!.free_fire_ign || '';
 
-  const matches = db.prepare(`
+  const matches = await db.prepare(`
     SELECT 
       t.id as tournament_id,
       t.title,
@@ -837,7 +893,7 @@ apiRouter.get('/user/matches', requireAuth, (req: Request & { user?: AuthUser },
 });
 
 // Admin: List All Payments with Filtering
-apiRouter.get('/admin/payments', requireRole(['super_admin', 'payment_manager']), (req: Request, res: Response) => {
+apiRouter.get('/admin/payments', requireRole(['super_admin', 'payment_manager']), async (req: Request, res: Response) => {
   const { status } = req.query;
   let query = `
     SELECT p.*, u.username, u.email, u.free_fire_ign, u.free_fire_uid, u.phone,
@@ -852,17 +908,17 @@ apiRouter.get('/admin/payments', requireRole(['super_admin', 'payment_manager'])
   if (status && status !== 'all') {
     query += ' WHERE p.status = ?';
     query += ' ORDER BY p.created_at DESC';
-    const payments = db.prepare(query).all(String(status));
+    const payments = await db.prepare(query).all(String(status));
     return res.json({ payments });
   }
 
   query += " ORDER BY CASE p.status WHEN 'pending' THEN 1 WHEN 'approved' THEN 2 ELSE 3 END, p.created_at DESC";
-  const payments = db.prepare(query).all();
+  const payments = await db.prepare(query).all();
   return res.json({ payments });
 });
 
 // Admin: Verify Payment (Approve or Reject with custom reason)
-apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'payment_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'payment_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const paymentId = req.params.id;
   const { status, rejection_reason } = req.body; // status: 'approved' | 'rejected'
 
@@ -870,7 +926,7 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
     return res.status(400).json({ error: 'Status must be approved or rejected.' });
   }
 
-  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as any;
+  const payment = await db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as any;
   if (!payment) {
     return res.status(404).json({ error: 'Payment record not found.' });
   }
@@ -878,7 +934,7 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
   const now = new Date().toISOString();
 
   // Update Payment record
-  db.prepare(`
+  await db.prepare(`
     UPDATE payments
     SET status = ?, rejection_reason = ?, verified_by_admin_id = ?, verified_at = ?
     WHERE id = ?
@@ -891,7 +947,7 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
   );
 
   // Update Registration record
-  db.prepare(`
+  await db.prepare(`
     UPDATE registrations
     SET payment_status = ?, updated_at = ?
     WHERE id = ?
@@ -899,7 +955,7 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
 
   // If rejected, free up the tournament slot
   if (status === 'rejected') {
-    db.prepare(`
+    await db.prepare(`
       UPDATE tournaments
       SET available_slots = MIN(total_slots, available_slots + 1),
           status = 'Registration Open',
@@ -909,9 +965,9 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
   }
 
   // Notify User
-  const tournament = db.prepare('SELECT title FROM tournaments WHERE id = ?').get(payment.tournament_id) as any;
+  const tournament = await db.prepare('SELECT title FROM tournaments WHERE id = ?').get(payment.tournament_id) as any;
   if (status === 'approved') {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (?, 'Payment Confirmed - Slot Locked!', ?, 'payment')
     `).run(
@@ -919,7 +975,7 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
       `Your UPI payment for ${tournament?.title || 'Tournament'} has been verified. Your slot is officially locked! View Room details in My Tournaments.`
     );
   } else {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (?, 'Payment Verification Declined', ?, 'payment')
     `).run(
@@ -932,50 +988,50 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
   return res.json({ success: true, status });
 });
 
-apiRouter.put('/admin/payments/:id/verify', requireRole(['super_admin', 'payment_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/admin/payments/:id/verify', requireRole(['super_admin', 'payment_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   // Delegate to same handler logic
   const paymentId = req.params.id;
   const { status, rejection_reason } = req.body;
   if (status !== 'approved' && status !== 'rejected') {
     return res.status(400).json({ error: 'Status must be approved or rejected.' });
   }
-  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as any;
+  const payment = await db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as any;
   if (!payment) {
     return res.status(404).json({ error: 'Payment record not found.' });
   }
   const now = new Date().toISOString();
-  db.prepare(`
+  await db.prepare(`
     UPDATE payments
     SET status = ?, rejection_reason = ?, verified_by_admin_id = ?, verified_at = ?
     WHERE id = ?
   `).run(status, status === 'rejected' ? (rejection_reason || 'UTR could not be verified.') : '', req.user!.id, now, paymentId);
-  db.prepare(`UPDATE registrations SET payment_status = ?, updated_at = ? WHERE id = ?`).run(status, now, payment.registration_id);
+  await db.prepare(`UPDATE registrations SET payment_status = ?, updated_at = ? WHERE id = ?`).run(status, now, payment.registration_id);
   if (status === 'rejected') {
-    db.prepare(`UPDATE tournaments SET available_slots = MIN(total_slots, available_slots + 1), status = 'Registration Open', updated_at = datetime('now') WHERE id = ?`).run(payment.tournament_id);
+    await db.prepare(`UPDATE tournaments SET available_slots = MIN(total_slots, available_slots + 1), status = 'Registration Open', updated_at = datetime('now') WHERE id = ?`).run(payment.tournament_id);
   }
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'VERIFY_PAYMENT', `${status.toUpperCase()} payment #${paymentId}`);
   return res.json({ success: true, status });
 });
 
 // Admin: Issue Refund Record
-apiRouter.post('/admin/payments/:id/refund', requireRole(['super_admin', 'payment_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/admin/payments/:id/refund', requireRole(['super_admin', 'payment_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const paymentId = req.params.id;
   const { reason, amount } = req.body;
 
-  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as any;
+  const payment = await db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as any;
   if (!payment) {
     return res.status(404).json({ error: 'Payment not found.' });
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO refunds (payment_id, user_id, amount, reason, status, processed_by_admin_id)
     VALUES (?, ?, ?, ?, 'processed', ?)
   `).run(paymentId, payment.user_id, amount || payment.amount, reason || 'Tournament rescheduled or cancelled', req.user!.id);
 
-  db.prepare(`UPDATE payments SET status = 'refunded' WHERE id = ?`).run(paymentId);
-  db.prepare(`UPDATE registrations SET payment_status = 'refunded' WHERE id = ?`).run(payment.registration_id);
+  await db.prepare(`UPDATE payments SET status = 'refunded' WHERE id = ?`).run(paymentId);
+  await db.prepare(`UPDATE registrations SET payment_status = 'refunded' WHERE id = ?`).run(payment.registration_id);
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (?, 'Refund Issued', ?, 'payment')
   `).run(payment.user_id, `A refund of ₹${amount || payment.amount} has been initiated for your tournament registration. Reason: ${reason}`);
@@ -990,24 +1046,24 @@ apiRouter.post('/admin/payments/:id/refund', requireRole(['super_admin', 'paymen
 // ==========================================
 
 // Create Team
-apiRouter.post('/teams', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/teams', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const { name, tag } = req.body;
   if (!name || name.trim().length < 3) {
     return res.status(400).json({ error: 'Team name must be at least 3 characters.' });
   }
 
-  const existing = db.prepare('SELECT id FROM teams WHERE name = ?').get(name.trim());
+  const existing = await db.prepare('SELECT id FROM teams WHERE name = ?').get(name.trim());
   if (existing) {
     return res.status(400).json({ error: 'A team with this name already exists.' });
   }
 
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO teams (name, tag, captain_id)
     VALUES (?, ?, ?)
   `).run(name.trim(), (tag || '').trim().toUpperCase(), req.user!.id);
 
   // Add captain as member
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO team_members (team_id, user_id, role, status)
     VALUES (?, ?, 'captain', 'accepted')
   `).run(result.lastInsertRowid, req.user!.id);
@@ -1016,8 +1072,8 @@ apiRouter.post('/teams', requireAuth, (req: Request & { user?: AuthUser }, res: 
 });
 
 // Get User's Teams
-apiRouter.get('/teams/my', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
-  const teams = db.prepare(`
+apiRouter.get('/teams/my', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
+  const teams = await db.prepare(`
     SELECT t.*, tm.role as member_role, tm.status as membership_status
     FROM teams t
     JOIN team_members tm ON tm.team_id = t.id
@@ -1025,8 +1081,8 @@ apiRouter.get('/teams/my', requireAuth, (req: Request & { user?: AuthUser }, res
   `).all(req.user!.id);
 
   // For each team, fetch all members
-  const teamsWithMembers = teams.map((team: any) => {
-    const members = db.prepare(`
+  const teamsWithMembers = await Promise.all(teams.map(async (team: any) => {
+    const members = await db.prepare(`
       SELECT tm.id as membership_id, tm.role, tm.status, tm.joined_at,
              u.id as user_id, u.username, u.free_fire_ign, u.free_fire_uid, u.avatar_url
       FROM team_members tm
@@ -1034,10 +1090,10 @@ apiRouter.get('/teams/my', requireAuth, (req: Request & { user?: AuthUser }, res
       WHERE tm.team_id = ?
     `).all(team.id);
     return { ...team, members };
-  });
+  }));
 
   // Pending invitations sent to this user
-  const pendingInvites = db.prepare(`
+  const pendingInvites = await db.prepare(`
     SELECT tm.id as invite_id, t.id as team_id, t.name as team_name, t.tag,
            captain.username as captain_name
     FROM team_members tm
@@ -1050,38 +1106,38 @@ apiRouter.get('/teams/my', requireAuth, (req: Request & { user?: AuthUser }, res
 });
 
 // Invite Teammate
-apiRouter.post('/teams/:id/invite', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/teams/:id/invite', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const teamId = req.params.id;
   const { username } = req.body;
 
-  const team = db.prepare('SELECT captain_id, name FROM teams WHERE id = ?').get(teamId) as any;
+  const team = await db.prepare('SELECT captain_id, name FROM teams WHERE id = ?').get(teamId) as any;
   if (!team || team.captain_id !== req.user!.id) {
     return res.status(403).json({ error: 'Only team captains can invite members.' });
   }
 
   // Check current member count
-  const count = db.prepare('SELECT count(*) as count FROM team_members WHERE team_id = ?').get(teamId) as { count: number };
+  const count = await db.prepare('SELECT count(*) as count FROM team_members WHERE team_id = ?').get(teamId) as { count: number };
   if (count.count >= 2) {
     return res.status(400).json({ error: 'Duo team is already complete (2/2 members).' });
   }
 
-  const targetUser = db.prepare('SELECT id, username FROM users WHERE username = ?').get(username.trim().toLowerCase()) as any;
+  const targetUser = (await db.prepare('SELECT id, username FROM users WHERE username = ?').get(username.trim().toLowerCase())) as any;
   if (!targetUser) {
     return res.status(404).json({ error: `User "${username}" was not found.` });
   }
 
-  const existingMember = db.prepare('SELECT id FROM team_members WHERE team_id = ? AND user_id = ?').get(teamId, targetUser.id);
+  const existingMember = await db.prepare('SELECT id FROM team_members WHERE team_id = ? AND user_id = ?').get(teamId, targetUser.id);
   if (existingMember) {
     return res.status(400).json({ error: 'User is already part of or invited to this team.' });
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO team_members (team_id, user_id, role, status)
     VALUES (?, ?, 'member', 'invited')
   `).run(teamId, targetUser.id);
 
   // Notify invited user
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (?, 'Team Invitation', ?, 'tournament')
   `).run(targetUser.id, `You were invited by ${req.user!.username} to join Duo Team "${team.name}". Check My Teams to accept.`);
@@ -1090,20 +1146,20 @@ apiRouter.post('/teams/:id/invite', requireAuth, (req: Request & { user?: AuthUs
 });
 
 // Accept or Reject Invitation
-apiRouter.post('/teams/invites/:inviteId/respond', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/teams/invites/:inviteId/respond', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const inviteId = req.params.inviteId;
   const { accept } = req.body;
 
-  const invite = db.prepare('SELECT * FROM team_members WHERE id = ? AND user_id = ?').get(inviteId, req.user!.id) as any;
+  const invite = await db.prepare('SELECT * FROM team_members WHERE id = ? AND user_id = ?').get(inviteId, req.user!.id) as any;
   if (!invite) {
     return res.status(404).json({ error: 'Invitation not found.' });
   }
 
   if (accept) {
-    db.prepare("UPDATE team_members SET status = 'accepted', joined_at = datetime('now') WHERE id = ?").run(inviteId);
+    await db.prepare("UPDATE team_members SET status = 'accepted', joined_at = datetime('now') WHERE id = ?").run(inviteId);
     return res.json({ success: true, message: 'Joined team!' });
   } else {
-    db.prepare('DELETE FROM team_members WHERE id = ?').run(inviteId);
+    await db.prepare('DELETE FROM team_members WHERE id = ?').run(inviteId);
     return res.json({ success: true, message: 'Invitation declined.' });
   }
 });
@@ -1114,9 +1170,9 @@ apiRouter.post('/teams/invites/:inviteId/respond', requireAuth, (req: Request & 
 // ==========================================
 
 // Get All Pages
-apiRouter.get('/cms/pages', (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.get('/cms/pages', async (req: Request & { user?: AuthUser }, res: Response) => {
   const isStaff = req.user && ['super_admin', 'content_manager'].includes(req.user.role);
-  const pages = db.prepare(`
+  const pages = await db.prepare(`
     SELECT id, title, slug, meta_title, meta_description, is_published, is_system, version, updated_at
     FROM website_pages
     ${isStaff ? '' : 'WHERE is_published = 1'}
@@ -1126,9 +1182,9 @@ apiRouter.get('/cms/pages', (req: Request & { user?: AuthUser }, res: Response) 
 });
 
 // Get Single Page by Slug (Public)
-apiRouter.get('/cms/pages/:slug', (req: Request, res: Response) => {
+apiRouter.get('/cms/pages/:slug', async (req: Request, res: Response) => {
   const slug = req.params.slug;
-  const page = db.prepare('SELECT * FROM website_pages WHERE slug = ?').get(slug);
+  const page = await db.prepare('SELECT * FROM website_pages WHERE slug = ?').get(slug);
   if (!page) {
     return res.status(404).json({ error: 'Page not found.' });
   }
@@ -1136,7 +1192,7 @@ apiRouter.get('/cms/pages/:slug', (req: Request, res: Response) => {
 });
 
 // Admin: Create New Page
-apiRouter.post('/cms/pages', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/cms/pages', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const { title, slug, content, meta_title, meta_description, og_title, og_description, is_published } = req.body;
 
   if (!title || !slug) {
@@ -1144,12 +1200,12 @@ apiRouter.post('/cms/pages', requireRole(['super_admin', 'content_manager']), (r
   }
 
   const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
-  const existing = db.prepare('SELECT id FROM website_pages WHERE slug = ?').get(cleanSlug);
+  const existing = await db.prepare('SELECT id FROM website_pages WHERE slug = ?').get(cleanSlug);
   if (existing) {
     return res.status(400).json({ error: 'A page with this URL slug already exists.' });
   }
 
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO website_pages (title, slug, content, meta_title, meta_description, og_title, og_description, is_published, is_system, version)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
   `).run(
@@ -1164,7 +1220,7 @@ apiRouter.post('/cms/pages', requireRole(['super_admin', 'content_manager']), (r
   );
 
   // Record initial version in version history
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO page_versions (page_id, version_num, title, slug, content, meta_title, meta_description, edited_by_admin_name)
     VALUES (?, 1, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -1182,11 +1238,11 @@ apiRouter.post('/cms/pages', requireRole(['super_admin', 'content_manager']), (r
 });
 
 // Admin: Update Page (Saves Revision to Page Versions Table)
-apiRouter.put('/cms/pages/:id', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/cms/pages/:id', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const pageId = req.params.id;
   const { title, slug, content, meta_title, meta_description, og_title, og_description, is_published } = req.body;
 
-  const currentPage = db.prepare('SELECT * FROM website_pages WHERE id = ?').get(pageId) as any;
+  const currentPage = await db.prepare('SELECT * FROM website_pages WHERE id = ?').get(pageId) as any;
   if (!currentPage) {
     return res.status(404).json({ error: 'Page not found.' });
   }
@@ -1194,7 +1250,7 @@ apiRouter.put('/cms/pages/:id', requireRole(['super_admin', 'content_manager']),
   const newVersion = (currentPage.version || 1) + 1;
   const cleanSlug = currentPage.is_system ? currentPage.slug : (slug || currentPage.slug).toLowerCase().replace(/[^a-z0-9-]+/g, '-');
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE website_pages
     SET title = ?, slug = ?, content = ?, meta_title = ?, meta_description = ?,
         og_title = ?, og_description = ?, is_published = ?, version = ?, updated_at = datetime('now')
@@ -1213,7 +1269,7 @@ apiRouter.put('/cms/pages/:id', requireRole(['super_admin', 'content_manager']),
   );
 
   // Save version snapshot
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO page_versions (page_id, version_num, title, slug, content, meta_title, meta_description, edited_by_admin_name)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -1232,28 +1288,28 @@ apiRouter.put('/cms/pages/:id', requireRole(['super_admin', 'content_manager']),
 });
 
 // Admin: View Page Revisions
-apiRouter.get('/cms/pages/:id/versions', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
+apiRouter.get('/cms/pages/:id/versions', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
   const pageId = req.params.id;
-  const versions = db.prepare(`
+  const versions = await db.prepare(`
     SELECT * FROM page_versions WHERE page_id = ? ORDER BY version_num DESC
   `).all(pageId);
   return res.json({ versions });
 });
 
 // Admin: Restore Previous Revision (Requirement 18)
-apiRouter.post('/cms/pages/:id/restore/:versionNum', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/cms/pages/:id/restore/:versionNum', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const pageId = req.params.id;
   const versionNum = req.params.versionNum;
 
-  const targetVersion = db.prepare('SELECT * FROM page_versions WHERE page_id = ? AND version_num = ?').get(pageId, versionNum) as any;
+  const targetVersion = await db.prepare('SELECT * FROM page_versions WHERE page_id = ? AND version_num = ?').get(pageId, versionNum) as any;
   if (!targetVersion) {
     return res.status(404).json({ error: 'Target revision not found.' });
   }
 
-  const currentPage = db.prepare('SELECT version FROM website_pages WHERE id = ?').get(pageId) as any;
+  const currentPage = await db.prepare('SELECT version FROM website_pages WHERE id = ?').get(pageId) as any;
   const nextVersion = (currentPage.version || 1) + 1;
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE website_pages
     SET title = ?, content = ?, meta_title = ?, meta_description = ?, version = ?, updated_at = datetime('now')
     WHERE id = ?
@@ -1267,7 +1323,7 @@ apiRouter.post('/cms/pages/:id/restore/:versionNum', requireRole(['super_admin',
   );
 
   // Record restoration as new version
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO page_versions (page_id, version_num, title, slug, content, meta_title, meta_description, edited_by_admin_name)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -1286,9 +1342,9 @@ apiRouter.post('/cms/pages/:id/restore/:versionNum', requireRole(['super_admin',
 });
 
 // Admin: Delete Page
-apiRouter.delete('/cms/pages/:id', requireRole(['super_admin']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.delete('/cms/pages/:id', requireRole(['super_admin']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const pageId = req.params.id;
-  const page = db.prepare('SELECT is_system, title FROM website_pages WHERE id = ?').get(pageId) as any;
+  const page = await db.prepare('SELECT is_system, title FROM website_pages WHERE id = ?').get(pageId) as any;
   if (!page) {
     return res.status(404).json({ error: 'Page not found.' });
   }
@@ -1296,7 +1352,7 @@ apiRouter.delete('/cms/pages/:id', requireRole(['super_admin']), (req: Request &
     return res.status(400).json({ error: 'System policy pages cannot be deleted. You can unpublish or edit them.' });
   }
 
-  db.prepare('DELETE FROM website_pages WHERE id = ?').run(pageId);
+  await db.prepare('DELETE FROM website_pages WHERE id = ?').run(pageId);
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'DELETE_PAGE', `Deleted page: ${page.title}`);
   return res.json({ success: true });
 });
@@ -1307,17 +1363,17 @@ apiRouter.delete('/cms/pages/:id', requireRole(['super_admin']), (req: Request &
 // ==========================================
 
 // Get Homepage Sections
-apiRouter.get('/cms/homepage-sections', (req: Request, res: Response) => {
-  const sections = db.prepare('SELECT * FROM homepage_sections ORDER BY sort_order ASC').all();
+apiRouter.get('/cms/homepage-sections', async (req: Request, res: Response) => {
+  const sections = await db.prepare('SELECT * FROM homepage_sections ORDER BY sort_order ASC').all();
   return res.json({ sections });
 });
 
 // Update Homepage Section
-apiRouter.put('/cms/homepage-sections/:id', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/cms/homepage-sections/:id', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const id = req.params.id;
   const { title, subtitle, content_json, sort_order, is_enabled } = req.body;
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE homepage_sections
     SET title = ?, subtitle = ?, content_json = ?, sort_order = ?, is_enabled = ?, updated_at = datetime('now')
     WHERE id = ?
@@ -1335,37 +1391,37 @@ apiRouter.put('/cms/homepage-sections/:id', requireRole(['super_admin', 'content
 });
 
 // Reorder Homepage Sections
-apiRouter.post('/cms/homepage-sections/reorder', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/cms/homepage-sections/reorder', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const { orders } = req.body; // Array of { id, sort_order }
   if (Array.isArray(orders)) {
     const updateStmt = db.prepare('UPDATE homepage_sections SET sort_order = ? WHERE id = ?');
     for (const item of orders) {
-      updateStmt.run(item.sort_order, item.id);
+      await updateStmt.run(item.sort_order, item.id);
     }
   }
   return res.json({ success: true });
 });
 
 // Navigation Menu Items
-apiRouter.get('/cms/navigation', (req: Request, res: Response) => {
-  const items = db.prepare('SELECT * FROM navigation_items ORDER BY sort_order ASC').all();
+apiRouter.get('/cms/navigation', async (req: Request, res: Response) => {
+  const items = await db.prepare('SELECT * FROM navigation_items ORDER BY sort_order ASC').all();
   return res.json({ items });
 });
 
-apiRouter.post('/cms/navigation', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/cms/navigation', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const { label, url, target, sort_order, is_footer } = req.body;
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO navigation_items (label, url, target, sort_order, is_visible, is_footer)
     VALUES (?, ?, ?, ?, 1, ?)
   `).run(label, url, target || '_self', parseInt(sort_order, 10) || 0, is_footer ? 1 : 0);
   return res.json({ success: true, id: result.lastInsertRowid });
 });
 
-apiRouter.put('/cms/navigation/:id', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/cms/navigation/:id', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const id = req.params.id;
   const { label, url, target, sort_order, is_visible, is_footer } = req.body;
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE navigation_items
     SET label = ?, url = ?, target = ?, sort_order = ?, is_visible = ?, is_footer = ?
     WHERE id = ?
@@ -1373,8 +1429,8 @@ apiRouter.put('/cms/navigation/:id', requireRole(['super_admin', 'content_manage
   return res.json({ success: true });
 });
 
-apiRouter.delete('/cms/navigation/:id', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
-  db.prepare('DELETE FROM navigation_items WHERE id = ?').run(req.params.id);
+apiRouter.delete('/cms/navigation/:id', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
+  await db.prepare('DELETE FROM navigation_items WHERE id = ?').run(req.params.id);
   return res.json({ success: true });
 });
 
@@ -1384,71 +1440,71 @@ apiRouter.delete('/cms/navigation/:id', requireRole(['super_admin', 'content_man
 // ==========================================
 
 // Public FAQs
-apiRouter.get('/faqs', (req: Request, res: Response) => {
-  const faqs = db.prepare('SELECT * FROM faqs WHERE is_published = 1 ORDER BY sort_order ASC').all();
+apiRouter.get('/faqs', async (req: Request, res: Response) => {
+  const faqs = await db.prepare('SELECT * FROM faqs WHERE is_published = 1 ORDER BY sort_order ASC').all();
   return res.json({ faqs });
 });
 
 // Admin FAQs
-apiRouter.get('/admin/faqs', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
-  const faqs = db.prepare('SELECT * FROM faqs ORDER BY sort_order ASC').all();
+apiRouter.get('/admin/faqs', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
+  const faqs = await db.prepare('SELECT * FROM faqs ORDER BY sort_order ASC').all();
   return res.json({ faqs });
 });
 
-apiRouter.post('/admin/faqs', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
+apiRouter.post('/admin/faqs', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
   const { category, question, answer, sort_order } = req.body;
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO faqs (category, question, answer, sort_order, is_published)
     VALUES (?, ?, ?, ?, 1)
   `).run(category || 'General', question, answer, parseInt(sort_order, 10) || 0);
   return res.json({ success: true, id: result.lastInsertRowid });
 });
 
-apiRouter.put('/admin/faqs/:id', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
+apiRouter.put('/admin/faqs/:id', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
   const id = req.params.id;
   const { category, question, answer, sort_order, is_published } = req.body;
-  db.prepare(`
+  await db.prepare(`
     UPDATE faqs SET category = ?, question = ?, answer = ?, sort_order = ?, is_published = ? WHERE id = ?
   `).run(category, question, answer, parseInt(sort_order, 10) || 0, is_published ? 1 : 0, id);
   return res.json({ success: true });
 });
 
-apiRouter.delete('/admin/faqs/:id', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
-  db.prepare('DELETE FROM faqs WHERE id = ?').run(req.params.id);
+apiRouter.delete('/admin/faqs/:id', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
+  await db.prepare('DELETE FROM faqs WHERE id = ?').run(req.params.id);
   return res.json({ success: true });
 });
 
 // Announcements
-apiRouter.get('/announcements', (req: Request, res: Response) => {
-  const announcements = db.prepare('SELECT * FROM announcements WHERE is_published = 1 AND is_banner_visible = 1 ORDER BY created_at DESC').all();
+apiRouter.get('/announcements', async (req: Request, res: Response) => {
+  const announcements = await db.prepare('SELECT * FROM announcements WHERE is_published = 1 AND is_banner_visible = 1 ORDER BY created_at DESC').all();
   return res.json({ announcements });
 });
 
-apiRouter.get('/admin/announcements', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
-  const announcements = db.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all();
+apiRouter.get('/admin/announcements', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
+  const announcements = await db.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all();
   return res.json({ announcements });
 });
 
-apiRouter.post('/admin/announcements', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
+apiRouter.post('/admin/announcements', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
   const { title, content, banner_type, is_banner_visible } = req.body;
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO announcements (title, content, banner_type, is_banner_visible, is_published)
     VALUES (?, ?, ?, ?, 1)
   `).run(title, content, banner_type || 'info', is_banner_visible ? 1 : 0);
   return res.json({ success: true, id: result.lastInsertRowid });
 });
 
-apiRouter.put('/admin/announcements/:id', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
+apiRouter.put('/admin/announcements/:id', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
   const id = req.params.id;
   const { title, content, banner_type, is_banner_visible, is_published } = req.body;
-  db.prepare(`
+  await db.prepare(`
     UPDATE announcements SET title = ?, content = ?, banner_type = ?, is_banner_visible = ?, is_published = ? WHERE id = ?
   `).run(title, content, banner_type, is_banner_visible ? 1 : 0, is_published ? 1 : 0, id);
   return res.json({ success: true });
 });
 
-apiRouter.delete('/admin/announcements/:id', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
-  db.prepare('DELETE FROM announcements WHERE id = ?').run(req.params.id);
+apiRouter.delete('/admin/announcements/:id', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
+  await db.prepare('DELETE FROM announcements WHERE id = ?').run(req.params.id);
   return res.json({ success: true });
 });
 
@@ -1457,12 +1513,12 @@ apiRouter.delete('/admin/announcements/:id', requireRole(['super_admin', 'conten
 // 9. MEDIA LIBRARY (REQUIREMENT 15)
 // ==========================================
 
-apiRouter.get('/media', (req: Request, res: Response) => {
-  const items = db.prepare('SELECT * FROM media_library ORDER BY created_at DESC').all();
+apiRouter.get('/media', async (req: Request, res: Response) => {
+  const items = await db.prepare('SELECT * FROM media_library ORDER BY created_at DESC').all();
   return res.json({ items });
 });
 
-apiRouter.post('/media/upload', requireRole(['super_admin', 'content_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/media/upload', requireRole(['super_admin', 'content_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const { filename, original_name, mime_type, file_size, url } = req.body;
 
   if (!url) {
@@ -1476,7 +1532,7 @@ apiRouter.post('/media/upload', requireRole(['super_admin', 'content_manager']),
     return res.status(400).json({ error: 'Executables and scripts are strictly prohibited.' });
   }
 
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO media_library (filename, original_name, mime_type, file_size, url, uploaded_by_admin_name)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(
@@ -1498,8 +1554,8 @@ apiRouter.post('/media/upload', requireRole(['super_admin', 'content_manager']),
   });
 });
 
-apiRouter.delete('/media/:id', requireRole(['super_admin', 'content_manager']), (req: Request, res: Response) => {
-  db.prepare('DELETE FROM media_library WHERE id = ?').run(req.params.id);
+apiRouter.delete('/media/:id', requireRole(['super_admin', 'content_manager']), async (req: Request, res: Response) => {
+  await db.prepare('DELETE FROM media_library WHERE id = ?').run(req.params.id);
   return res.json({ success: true });
 });
 
@@ -1509,9 +1565,9 @@ apiRouter.delete('/media/:id', requireRole(['super_admin', 'content_manager']), 
 // ==========================================
 
 // Get Tournament Results
-apiRouter.get('/results/tournament/:id', (req: Request, res: Response) => {
+apiRouter.get('/results/tournament/:id', async (req: Request, res: Response) => {
   const tournamentId = req.params.id;
-  const results = db.prepare(`
+  const results = await db.prepare(`
     SELECT r.*, u.username, u.free_fire_ign, u.avatar_url, t.name as team_name
     FROM results r
     LEFT JOIN users u ON u.id = r.user_id
@@ -1524,7 +1580,7 @@ apiRouter.get('/results/tournament/:id', (req: Request, res: Response) => {
 });
 
 // Admin Submit Tournament Results
-apiRouter.post('/admin/results/:tournamentId', requireRole(['super_admin', 'tournament_manager']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/admin/results/:tournamentId', requireRole(['super_admin', 'tournament_manager']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const tournamentId = req.params.tournamentId;
   const { entries } = req.body; // Array of results
 
@@ -1533,7 +1589,7 @@ apiRouter.post('/admin/results/:tournamentId', requireRole(['super_admin', 'tour
   }
 
   // Clear existing results for this tournament
-  db.prepare('DELETE FROM results WHERE tournament_id = ?').run(tournamentId);
+  await db.prepare('DELETE FROM results WHERE tournament_id = ?').run(tournamentId);
 
   const insertResult = db.prepare(`
     INSERT INTO results (tournament_id, rank, user_id, team_id, player_name, kills, placement_points, kill_points, total_points, prize_amount, screenshot_url, notes)
@@ -1542,7 +1598,7 @@ apiRouter.post('/admin/results/:tournamentId', requireRole(['super_admin', 'tour
 
   for (const item of entries) {
     const totalPts = (parseInt(item.placement_points, 10) || 0) + (parseInt(item.kills, 10) || 0);
-    insertResult.run(
+    await insertResult.run(
       tournamentId,
       item.rank,
       item.user_id || null,
@@ -1559,7 +1615,7 @@ apiRouter.post('/admin/results/:tournamentId', requireRole(['super_admin', 'tour
 
     // If user_id exists, notify them of result
     if (item.user_id) {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO notifications (user_id, title, message, type)
         VALUES (?, 'Match Results Published!', ?, 'match')
       `).run(item.user_id, `Results for your tournament are live! You finished Rank #${item.rank} with ${item.kills} kills and ${totalPts} points.`);
@@ -1567,15 +1623,15 @@ apiRouter.post('/admin/results/:tournamentId', requireRole(['super_admin', 'tour
   }
 
   // Mark tournament status as Completed
-  db.prepare("UPDATE tournaments SET status = 'Completed', updated_at = datetime('now') WHERE id = ?").run(tournamentId);
+  await db.prepare("UPDATE tournaments SET status = 'Completed', updated_at = datetime('now') WHERE id = ?").run(tournamentId);
 
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'PUBLISH_RESULTS', `Published results for tournament #${tournamentId}`);
   return res.json({ success: true });
 });
 
 // Global Leaderboard
-apiRouter.get('/leaderboard', (req: Request, res: Response) => {
-  const leaderboard = db.prepare(`
+apiRouter.get('/leaderboard', async (req: Request, res: Response) => {
+  const leaderboard = await db.prepare(`
     SELECT * FROM leaderboard ORDER BY total_points DESC, wins DESC LIMIT 50
   `).all();
   return res.json({ leaderboard });
@@ -1587,44 +1643,44 @@ apiRouter.get('/leaderboard', (req: Request, res: Response) => {
 // ==========================================
 
 // Get User Notifications
-apiRouter.get('/notifications', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
-  const notifications = db.prepare(`
+apiRouter.get('/notifications', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
+  const notifications = await db.prepare(`
     SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
   `).all(req.user!.id);
-  const unreadCount = db.prepare('SELECT count(*) as count FROM notifications WHERE user_id = ? AND is_read = 0').get(req.user!.id) as { count: number };
+  const unreadCount = await db.prepare('SELECT count(*) as count FROM notifications WHERE user_id = ? AND is_read = 0').get(req.user!.id) as { count: number };
 
   return res.json({ notifications, unreadCount: unreadCount.count });
 });
 
 // Mark Notification as Read
-apiRouter.put('/notifications/:id/read', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').run(req.params.id, req.user!.id);
+apiRouter.put('/notifications/:id/read', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
+  await db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').run(req.params.id, req.user!.id);
   return res.json({ success: true });
 });
 
 // Mark All as Read
-apiRouter.post('/notifications/mark-all-read', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').run(req.user!.id);
+apiRouter.post('/notifications/mark-all-read', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
+  await db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').run(req.user!.id);
   return res.json({ success: true });
 });
 
 // Support Tickets: User's tickets
-apiRouter.get('/tickets/my', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
-  const tickets = db.prepare(`
+apiRouter.get('/tickets/my', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
+  const tickets = await db.prepare(`
     SELECT * FROM support_tickets WHERE user_id = ? ORDER BY created_at DESC
   `).all(req.user!.id);
   return res.json({ tickets });
 });
 
 // Create Support Ticket
-apiRouter.post('/tickets', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/tickets', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const { category, subject, message, screenshot_url, priority } = req.body;
   if (!subject || !message) {
     return res.status(400).json({ error: 'Subject and message are required.' });
   }
 
   const ticketCode = 'FLX-' + Math.floor(100000 + Math.random() * 900000);
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO support_tickets (ticket_code, user_id, category, subject, message, screenshot_url, priority, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'open')
   `).run(
@@ -1641,12 +1697,12 @@ apiRouter.post('/tickets', requireAuth, (req: Request & { user?: AuthUser }, res
 });
 
 // Get Ticket Messages / Replies
-apiRouter.get('/tickets/:id/messages', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.get('/tickets/:id/messages', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const ticketId = req.params.id;
   const isStaff = ['super_admin', 'support_manager'].includes(req.user!.role);
 
   // Verify ownership if not staff
-  const ticket = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(ticketId) as any;
+  const ticket = await db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(ticketId) as any;
   if (!ticket) {
     return res.status(404).json({ error: 'Ticket not found.' });
   }
@@ -1654,7 +1710,7 @@ apiRouter.get('/tickets/:id/messages', requireAuth, (req: Request & { user?: Aut
     return res.status(403).json({ error: 'Access denied.' });
   }
 
-  const replies = db.prepare(`
+  const replies = await db.prepare(`
     SELECT sr.*, u.username, u.role, u.avatar_url
     FROM support_replies sr
     JOIN users u ON u.id = sr.user_id
@@ -1666,7 +1722,7 @@ apiRouter.get('/tickets/:id/messages', requireAuth, (req: Request & { user?: Aut
 });
 
 // Reply to Ticket
-apiRouter.post('/tickets/:id/reply', requireAuth, (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.post('/tickets/:id/reply', requireAuth, async (req: Request & { user?: AuthUser }, res: Response) => {
   const ticketId = req.params.id;
   const { message, screenshot_url } = req.body;
 
@@ -1675,7 +1731,7 @@ apiRouter.post('/tickets/:id/reply', requireAuth, (req: Request & { user?: AuthU
   }
 
   const isStaff = ['super_admin', 'support_manager'].includes(req.user!.role);
-  const ticket = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(ticketId) as any;
+  const ticket = await db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(ticketId) as any;
   if (!ticket) {
     return res.status(404).json({ error: 'Ticket not found.' });
   }
@@ -1684,18 +1740,18 @@ apiRouter.post('/tickets/:id/reply', requireAuth, (req: Request & { user?: AuthU
     return res.status(403).json({ error: 'Access denied.' });
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO support_replies (ticket_id, user_id, is_admin, message, screenshot_url)
     VALUES (?, ?, ?, ?, ?)
   `).run(ticketId, req.user!.id, isStaff ? 1 : 0, message, screenshot_url || '');
 
   // Update ticket status
   const nextStatus = isStaff ? 'in_progress' : 'open';
-  db.prepare("UPDATE support_tickets SET status = ?, updated_at = datetime('now') WHERE id = ?").run(nextStatus, ticketId);
+  await db.prepare("UPDATE support_tickets SET status = ?, updated_at = datetime('now') WHERE id = ?").run(nextStatus, ticketId);
 
   // If admin replied, notify user
   if (isStaff && ticket.user_id !== req.user!.id) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (?, 'Support Replied: #' || ?, ?, 'support')
     `).run(ticket.user_id, ticket.ticket_code, `A support agent replied to your ticket "${ticket.subject}".`);
@@ -1705,8 +1761,8 @@ apiRouter.post('/tickets/:id/reply', requireAuth, (req: Request & { user?: AuthU
 });
 
 // Admin: List All Support Tickets
-apiRouter.get('/admin/tickets', requireRole(['super_admin', 'support_manager']), (req: Request, res: Response) => {
-  const tickets = db.prepare(`
+apiRouter.get('/admin/tickets', requireRole(['super_admin', 'support_manager']), async (req: Request, res: Response) => {
+  const tickets = await db.prepare(`
     SELECT st.*, u.username, u.email, u.phone
     FROM support_tickets st
     JOIN users u ON u.id = st.user_id
@@ -1716,10 +1772,10 @@ apiRouter.get('/admin/tickets', requireRole(['super_admin', 'support_manager']),
 });
 
 // Admin: Update Ticket Status
-apiRouter.put('/admin/tickets/:id/status', requireRole(['super_admin', 'support_manager']), (req: Request, res: Response) => {
+apiRouter.put('/admin/tickets/:id/status', requireRole(['super_admin', 'support_manager']), async (req: Request, res: Response) => {
   const id = req.params.id;
   const { status, priority } = req.body;
-  db.prepare(`
+  await db.prepare(`
     UPDATE support_tickets SET status = ?, priority = ?, updated_at = datetime('now') WHERE id = ?
   `).run(status, priority, id);
   return res.json({ success: true });
@@ -1731,8 +1787,8 @@ apiRouter.put('/admin/tickets/:id/status', requireRole(['super_admin', 'support_
 // ==========================================
 
 // Public Website Settings
-apiRouter.get('/settings/public', (req: Request, res: Response) => {
-  const rows = db.prepare('SELECT key, value FROM website_settings').all() as { key: string; value: string }[];
+apiRouter.get('/settings/public', async (req: Request, res: Response) => {
+  const rows = await db.prepare('SELECT key, value FROM website_settings').all() as { key: string; value: string }[];
   const settings: Record<string, string> = {};
   for (const r of rows) {
     settings[r.key] = r.value;
@@ -1741,7 +1797,7 @@ apiRouter.get('/settings/public', (req: Request, res: Response) => {
 });
 
 // Admin: Update Website Settings
-apiRouter.put('/admin/settings', requireRole(['super_admin']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/admin/settings', requireRole(['super_admin']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const { settings } = req.body;
   if (!settings || typeof settings !== 'object') {
     return res.status(400).json({ error: 'Settings object is required.' });
@@ -1754,7 +1810,7 @@ apiRouter.put('/admin/settings', requireRole(['super_admin']), (req: Request & {
   `);
 
   for (const [key, value] of Object.entries(settings)) {
-    upsert.run(key, String(value));
+    await upsert.run(key, String(value));
   }
 
   syncDataBackup();
@@ -1769,17 +1825,17 @@ apiRouter.put('/admin/settings', requireRole(['super_admin']), (req: Request & {
 // ==========================================
 
 // Dashboard Statistics
-apiRouter.get('/admin/stats', requireAdmin, (req: Request, res: Response) => {
-  const totalUsers = db.prepare('SELECT count(*) as count FROM users WHERE is_deactivated = 0').get() as { count: number };
-  const totalTournaments = db.prepare('SELECT count(*) as count FROM tournaments').get() as { count: number };
-  const liveMatches = db.prepare("SELECT count(*) as count FROM tournaments WHERE status = 'Live'").get() as { count: number };
-  const pendingPayments = db.prepare("SELECT count(*) as count FROM payments WHERE status = 'pending'").get() as { count: number };
-  const approvedPayments = db.prepare("SELECT count(*) as count FROM payments WHERE status = 'approved'").get() as { count: number };
-  const totalRevenue = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'approved'").get() as { total: number };
-  const openTickets = db.prepare("SELECT count(*) as count FROM support_tickets WHERE status = 'open'").get() as { count: number };
+apiRouter.get('/admin/stats', requireAdmin, async (req: Request, res: Response) => {
+  const totalUsers = await db.prepare('SELECT count(*) as count FROM users WHERE is_deactivated = 0').get() as { count: number };
+  const totalTournaments = await db.prepare('SELECT count(*) as count FROM tournaments').get() as { count: number };
+  const liveMatches = await db.prepare("SELECT count(*) as count FROM tournaments WHERE status = 'Live'").get() as { count: number };
+  const pendingPayments = await db.prepare("SELECT count(*) as count FROM payments WHERE status = 'pending'").get() as { count: number };
+  const approvedPayments = await db.prepare("SELECT count(*) as count FROM payments WHERE status = 'approved'").get() as { count: number };
+  const totalRevenue = await db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'approved'").get() as { total: number };
+  const openTickets = await db.prepare("SELECT count(*) as count FROM support_tickets WHERE status = 'open'").get() as { count: number };
 
   // Recent 5 activity logs
-  const recentLogs = db.prepare('SELECT * FROM admin_activity_logs ORDER BY created_at DESC LIMIT 5').all();
+  const recentLogs = await db.prepare('SELECT * FROM admin_activity_logs ORDER BY created_at DESC LIMIT 5').all();
 
   return res.json({
     totalUsers: totalUsers.count,
@@ -1794,8 +1850,8 @@ apiRouter.get('/admin/stats', requireAdmin, (req: Request, res: Response) => {
 });
 
 // Admin: User Management List
-apiRouter.get('/admin/users', requireRole(['super_admin']), (req: Request, res: Response) => {
-  const users = db.prepare(`
+apiRouter.get('/admin/users', requireRole(['super_admin']), async (req: Request, res: Response) => {
+  const users = await db.prepare(`
     SELECT id, username, email, full_name, free_fire_uid, free_fire_ign, phone, role, is_blocked, is_deactivated, created_at
     FROM users
     ORDER BY created_at DESC
@@ -1804,11 +1860,11 @@ apiRouter.get('/admin/users', requireRole(['super_admin']), (req: Request, res: 
 });
 
 // Admin: Update User Role or Block Status
-apiRouter.put('/admin/users/:id', requireRole(['super_admin']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/admin/users/:id', requireRole(['super_admin']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const id = req.params.id;
   const { role, is_blocked } = req.body;
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE users
     SET role = COALESCE(?, role), is_blocked = COALESCE(?, is_blocked), updated_at = datetime('now')
     WHERE id = ?
@@ -1821,14 +1877,14 @@ apiRouter.put('/admin/users/:id', requireRole(['super_admin']), (req: Request & 
 });
 
 // Admin: Reset any user's password directly (encrypted with bcrypt)
-apiRouter.put('/admin/users/:id/reset-password', requireRole(['super_admin']), (req: Request & { user?: AuthUser }, res: Response) => {
+apiRouter.put('/admin/users/:id/reset-password', requireRole(['super_admin']), async (req: Request & { user?: AuthUser }, res: Response) => {
   const id = req.params.id;
   const passwordToSet = req.body.newPassword || req.body.new_password;
   if (!passwordToSet || passwordToSet.length < 6) {
     return res.status(400).json({ error: 'New password must be at least 6 characters.' });
   }
   const passwordHash = hashPassword(passwordToSet);
-  db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, id);
+  await db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, id);
 
   syncDataBackup();
 
@@ -1837,7 +1893,7 @@ apiRouter.put('/admin/users/:id/reset-password', requireRole(['super_admin']), (
 });
 
 // Security & Audit Logs List
-apiRouter.get('/admin/activity-logs', requireRole(['super_admin']), (req: Request, res: Response) => {
-  const logs = db.prepare('SELECT * FROM admin_activity_logs ORDER BY created_at DESC LIMIT 100').all();
+apiRouter.get('/admin/activity-logs', requireRole(['super_admin']), async (req: Request, res: Response) => {
+  const logs = await db.prepare('SELECT * FROM admin_activity_logs ORDER BY created_at DESC LIMIT 100').all();
   return res.json({ logs });
 });

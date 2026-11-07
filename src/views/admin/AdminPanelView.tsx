@@ -36,7 +36,8 @@ import {
   Ban,
   UserX,
   UserCheck,
-  ShieldAlert
+  ShieldAlert,
+  Share2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext.js';
@@ -1902,13 +1903,152 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                 </div>
               </div>
             </div>
+
+            {/* Official Social Media Handles & Links (YouTube, Instagram, Discord, Telegram) */}
+            <div className="sm:col-span-2 p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
+              <div className="border-b border-slate-800 pb-2.5">
+                <h4 className="font-gaming font-bold text-sm text-white flex items-center gap-2">
+                  <Share2 className="w-4 h-4 text-orange-400" />
+                  OFFICIAL SOCIAL MEDIA LINKS & IDS (FOOTER REDIRECTS)
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Enter your channel links or usernames. When players click the YouTube, Instagram, Discord, or Telegram buttons anywhere on the site, they will redirect straight to your channels!
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* YouTube */}
+                <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-xs text-red-400 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                      YouTube Channel Link / Handle
+                    </label>
+                    {settings.social_youtube && (
+                      <a
+                        href={settings.social_youtube.startsWith('http') ? settings.social_youtube : `https://youtube.com/${settings.social_youtube.startsWith('@') ? settings.social_youtube : '@' + settings.social_youtube}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-red-400 hover:text-white flex items-center gap-0.5 font-bold"
+                      >
+                        <span>Test Link</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.social_youtube || ''}
+                    onChange={e => setSettings(prev => ({ ...prev, social_youtube: e.target.value }))}
+                    placeholder="e.g. https://youtube.com/@flaxyesports or @flaxyesports"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:border-red-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    Full YouTube channel URL or @handle
+                  </span>
+                </div>
+
+                {/* Instagram */}
+                <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-xs text-pink-400 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse" />
+                      Instagram Profile / Username
+                    </label>
+                    {settings.social_instagram && (
+                      <a
+                        href={settings.social_instagram.startsWith('http') ? settings.social_instagram : `https://instagram.com/${settings.social_instagram.replace('@', '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-pink-400 hover:text-white flex items-center gap-0.5 font-bold"
+                      >
+                        <span>Test Link</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.social_instagram || ''}
+                    onChange={e => setSettings(prev => ({ ...prev, social_instagram: e.target.value }))}
+                    placeholder="e.g. https://instagram.com/flaxy_esports or flaxy_esports"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:border-pink-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    Full Instagram URL or profile username
+                  </span>
+                </div>
+
+                {/* Discord */}
+                <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-xs text-indigo-400 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+                      Discord Server / Invite Link
+                    </label>
+                    {settings.social_discord && (
+                      <a
+                        href={settings.social_discord.startsWith('http') ? settings.social_discord : `https://discord.gg/${settings.social_discord}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-indigo-400 hover:text-white flex items-center gap-0.5 font-bold"
+                      >
+                        <span>Test Link</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.social_discord || ''}
+                    onChange={e => setSettings(prev => ({ ...prev, social_discord: e.target.value }))}
+                    placeholder="e.g. https://discord.gg/flaxy or flaxy"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:border-indigo-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    Discord invite link (e.g. discord.gg/flaxy)
+                  </span>
+                </div>
+
+                {/* Telegram */}
+                <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-xs text-cyan-400 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" />
+                      Telegram Channel / Group Link
+                    </label>
+                    {settings.social_telegram && (
+                      <a
+                        href={settings.social_telegram.startsWith('http') ? settings.social_telegram : `https://t.me/${settings.social_telegram.replace('@', '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-cyan-400 hover:text-white flex items-center gap-0.5 font-bold"
+                      >
+                        <span>Test Link</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.social_telegram || ''}
+                    onChange={e => setSettings(prev => ({ ...prev, social_telegram: e.target.value }))}
+                    placeholder="e.g. https://t.me/flaxyesports or flaxyesports"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 block">
+                    Telegram public channel link or username
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <button
             type="submit"
-            className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow transition-all"
+            className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow transition-all uppercase tracking-wider"
           >
-            SAVE GLOBAL SETTINGS
+            SAVE GLOBAL SETTINGS & SOCIAL LINKS
           </button>
         </form>
       )}

@@ -376,56 +376,60 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Main Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-        <button
-          onClick={() => setActiveTab('room')}
-          className={`px-5 py-2.5 text-sm font-gaming font-bold rounded-xl transition-all flex items-center gap-2 ${
-            activeTab === 'room'
-              ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>Live Room & Timings</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('rules')}
-          className={`px-5 py-2.5 text-sm font-gaming font-bold rounded-xl transition-all flex items-center gap-2 ${
-            activeTab === 'rules'
-              ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4" />
-          <span>Tournament Rules</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('roster')}
-          className={`px-5 py-2.5 text-sm font-gaming font-bold rounded-xl transition-all flex items-center gap-2 ${
-            activeTab === 'roster'
-              ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Participants Roster</span>
-        </button>
-
-        {tournament.status === 'Completed' && (
+      {/* Main Tabs Navigation - 3 Options Fully Visible & Responsive (No side clipping) */}
+      <div className="w-full bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-xl">
+        <div className="grid grid-cols-3 gap-1 sm:gap-2">
           <button
-            onClick={() => setActiveTab('results')}
-            className={`px-5 py-2.5 text-sm font-gaming font-bold rounded-xl transition-all flex items-center gap-2 ${
-              activeTab === 'results'
-                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            onClick={() => setActiveTab('room')}
+            className={`w-full py-2.5 px-1.5 sm:px-3 text-xs sm:text-sm font-gaming font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'room'
+                ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25 ring-1 ring-orange-400/40'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
             }`}
           >
-            <Trophy className="w-4 h-4" />
-            <span>Match Results & Standings</span>
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-amber-300" />
+            <span className="truncate">Live Room</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('rules')}
+            className={`w-full py-2.5 px-1.5 sm:px-3 text-xs sm:text-sm font-gaming font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'rules'
+                ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25 ring-1 ring-orange-400/40'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-cyan-300" />
+            <span className="truncate">Rules</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('roster')}
+            className={`w-full py-2.5 px-1.5 sm:px-3 text-xs sm:text-sm font-gaming font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'roster'
+                ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25 ring-1 ring-orange-400/40'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-emerald-300" />
+            <span className="truncate">Roster ({filledSlots}/{tournament.total_slots})</span>
+          </button>
+        </div>
+
+        {tournament.status === 'Completed' && (
+          <div className="mt-2 pt-2 border-t border-slate-800">
+            <button
+              onClick={() => setActiveTab('results')}
+              className={`w-full py-2 px-3 text-xs sm:text-sm font-gaming font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'results'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Trophy className="w-4 h-4 text-amber-300" />
+              <span>Match Results & Standings</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -435,9 +439,9 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
           {/* Left: Room Status & Countdown */}
           <div className="lg:col-span-7 space-y-6">
             <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-2">
-                  <span className="font-gaming font-bold text-lg text-white">
+                  <span className="font-gaming font-bold text-base sm:text-lg text-white">
                     FREE FIRE CUSTOM ROOM
                   </span>
                   <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded uppercase ${
@@ -455,23 +459,23 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
                 </div>
               </div>
 
-              {/* Room Schedule Timings Table */}
-              <div className="grid grid-cols-3 gap-3 text-xs">
-                <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80">
-                  <div className="text-[10px] text-slate-500 uppercase">Room Opening</div>
-                  <div className="font-semibold text-orange-400 mt-1">
+              {/* Room Schedule Timings Table (3 Options Responsive) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80 flex sm:flex-col justify-between sm:justify-start items-center sm:items-start">
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">1. Room Opening</div>
+                  <div className="font-semibold text-orange-400 mt-0 sm:mt-1 font-mono text-xs sm:text-sm">
                     {formatISTTime(room?.opening_time)}
                   </div>
                 </div>
-                <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80">
-                  <div className="text-[10px] text-slate-500 uppercase">Match Start</div>
-                  <div className="font-semibold text-emerald-400 mt-1">
+                <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80 flex sm:flex-col justify-between sm:justify-start items-center sm:items-start">
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">2. Match Start</div>
+                  <div className="font-semibold text-emerald-400 mt-0 sm:mt-1 font-mono text-xs sm:text-sm">
                     {formatISTTime(room?.match_start_time)}
                   </div>
                 </div>
-                <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80">
-                  <div className="text-[10px] text-slate-500 uppercase">Room Closing</div>
-                  <div className="font-semibold text-slate-300 mt-1">
+                <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80 flex sm:flex-col justify-between sm:justify-start items-center sm:items-start">
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">3. Room Closing</div>
+                  <div className="font-semibold text-slate-300 mt-0 sm:mt-1 font-mono text-xs sm:text-sm">
                     {formatISTTime(room?.closing_time)}
                   </div>
                 </div>
@@ -880,23 +884,52 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
       {/* JOIN & PAYMENT MODAL */}
       {showJoinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 space-y-5 shadow-2xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-orange-400" />
-                <span className="font-gaming font-bold text-lg text-white">
+                <span className="font-gaming font-bold text-base sm:text-lg text-white">
                   {joinStep === 'confirm' && 'CONFIRM REGISTRATION'}
                   {joinStep === 'payment' && 'MANUAL UPI PAYMENT'}
-                  {joinStep === 'done' && 'REGISTRATION COMPLETED'}
+                  {joinStep === 'done' && 'PAYMENT SUBMITTED FOR APPROVAL'}
                 </span>
               </div>
               <button
-                onClick={() => setShowJoinModal(false)}
-                className="text-slate-400 hover:text-white text-xs font-semibold"
+                type="button"
+                onClick={() => {
+                  setShowJoinModal(false);
+                  setPaymentError(null);
+                }}
+                className="text-slate-400 hover:text-white text-xs font-semibold px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
-                Cancel
+                ✕ Close
               </button>
+            </div>
+
+            {/* 3 Step Visual Flow Tracker */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+              <div className={`py-1.5 px-1 rounded-xl text-[10px] sm:text-xs font-gaming font-bold transition-all ${
+                joinStep === 'confirm'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md shadow-orange-500/25 ring-1 ring-orange-400/50'
+                  : 'text-slate-500'
+              }`}>
+                1. Match Slot
+              </div>
+              <div className={`py-1.5 px-1 rounded-xl text-[10px] sm:text-xs font-gaming font-bold transition-all ${
+                joinStep === 'payment'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md shadow-orange-500/25 ring-1 ring-orange-400/50'
+                  : 'text-slate-500'
+              }`}>
+                2. Pay UPI
+              </div>
+              <div className={`py-1.5 px-1 rounded-xl text-[10px] sm:text-xs font-gaming font-bold transition-all ${
+                joinStep === 'done'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30 font-black ring-1 ring-emerald-300'
+                  : 'text-slate-500'
+              }`}>
+                3. Admin Review
+              </div>
             </div>
 
             {paymentError && (
@@ -908,11 +941,11 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
 
             {/* STEP 1: CONFIRM */}
             {joinStep === 'confirm' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Tournament:</span>
-                    <span className="font-bold text-white">{tournament.title}</span>
+                    <span className="font-bold text-white text-right">{tournament.title}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Match Mode:</span>
@@ -932,22 +965,33 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
                   <div>• Room credentials will unlock on this page at the scheduled time.</div>
                 </div>
 
-                <button
-                  onClick={handleRegister}
-                  disabled={paymentSubmitting}
-                  className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-gaming font-bold text-sm rounded-xl shadow-lg transition-all"
-                >
-                  {paymentSubmitting ? 'RESERVING SLOT...' : 'CONFIRM & PROCEED'}
-                </button>
+                {/* Step 1 Action Buttons: Cancel and Confirm */}
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowJoinModal(false)}
+                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-gaming font-bold text-xs rounded-xl border border-slate-700 transition-all uppercase"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRegister}
+                    disabled={paymentSubmitting}
+                    className="flex-[2] py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-gaming font-bold text-xs rounded-xl shadow-lg transition-all disabled:opacity-50 uppercase tracking-wider"
+                  >
+                    {paymentSubmitting ? 'RESERVING SLOT...' : 'CONFIRM & PROCEED'}
+                  </button>
+                </div>
               </div>
             )}
 
             {/* STEP 2: MANUAL UPI PAYMENT (REQUIREMENT 5) */}
             {joinStep === 'payment' && (
               <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                <div className="text-center space-y-2.5">
+                <div className="text-center space-y-2">
                   <div className="text-xs font-semibold text-slate-300">
-                    Scan Scanner or Click to Pay via UPI App:
+                    Scan QR Code or Open UPI App to Complete Payment:
                   </div>
 
                   {/* Payment Scanner Image */}
@@ -955,7 +999,7 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
                     <img
                       src={settings.payment_qr_url || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${settings.upi_id || 'flaxy.esports@icici'}&pn=FlaxyEsports&am=${tournament.entry_fee}&cu=INR`}
                       alt="Payment Scanner"
-                      className="w-44 h-44 object-contain mx-auto"
+                      className="w-40 h-40 object-contain mx-auto"
                     />
                   </div>
 
@@ -997,7 +1041,7 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:border-orange-500 focus:outline-none"
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    Admin will contact you on this WhatsApp if payment needs clarification.
+                    Admin verification team will reach out on WhatsApp if needed.
                   </span>
                 </div>
 
@@ -1015,7 +1059,7 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono placeholder-slate-600 focus:border-orange-500 focus:outline-none"
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    Found in your Google Pay, PhonePe, or Paytm payment receipt.
+                    Found in your Google Pay, PhonePe, Paytm or BHIM payment receipt.
                   </span>
                 </div>
 
@@ -1043,40 +1087,79 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
 
                 {/* Verification Notice */}
                 <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-[11px] leading-relaxed">
-                  🔒 <strong>Verification Rule:</strong> Payment goes directly to the Admin Panel. Once verified by Admin, Room ID and Password will unlock on your match screen at Room Opening time!
+                  🔒 <strong>Admin Verification:</strong> Details will immediately arrive at the Admin Panel. Once verified by Admin, Room ID and Password will unlock on this match screen at Room Opening time!
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={paymentSubmitting}
-                  className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-gaming font-bold text-sm rounded-xl shadow-lg transition-all disabled:opacity-50 tracking-wider"
-                >
-                  {paymentSubmitting ? 'SENDING TO ADMIN REVIEW...' : 'SUBMIT PAYMENT FOR ADMIN APPROVAL'}
-                </button>
+                {/* Submit and Cancel Buttons (User Request) */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowJoinModal(false);
+                      setPaymentError(null);
+                    }}
+                    className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-gaming font-bold text-xs sm:text-sm rounded-xl border border-slate-700 transition-all uppercase tracking-wider"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={paymentSubmitting}
+                    className="flex-[2] py-3.5 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-gaming font-bold text-xs sm:text-sm rounded-xl shadow-lg transition-all disabled:opacity-50 tracking-wider flex items-center justify-center gap-2 uppercase"
+                  >
+                    {paymentSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Sending to Admin...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Submit for Admin Approval</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </form>
             )}
 
             {/* STEP 3: SUCCESS CONFIRMATION */}
             {joinStep === 'done' && (
               <div className="text-center space-y-4 py-4">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
                   <h4 className="font-gaming font-bold text-2xl text-white">
-                    WARRIOR REGISTERED!
+                    DETAILS SENT FOR ADMIN APPROVAL!
                   </h4>
-                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                    Your tournament slot has been locked in. Track your room credentials on this page or under My Tournaments in your Dashboard.
+                  <p className="text-xs text-slate-300 mt-2 max-w-sm mx-auto leading-relaxed">
+                    Your UTR transaction reference, WhatsApp number, and screenshot receipt have been forwarded to the <strong>Flaxy Admin Desk</strong> for verification.
                   </p>
+                  <div className="mt-3 p-3 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-orange-400 max-w-sm mx-auto">
+                    Room ID & Password will unlock automatically on this match screen as soon as Admin approves your payment!
+                  </div>
                 </div>
 
-                <button
-                  onClick={() => setShowJoinModal(false)}
-                  className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow-lg"
-                >
-                  Back to Match Screen
-                </button>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowJoinModal(false)}
+                    className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-gaming font-bold text-xs rounded-xl border border-slate-700"
+                  >
+                    Close Window
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowJoinModal(false);
+                      onNavigate('dashboard', { tab: 'tournaments' });
+                    }}
+                    className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow-lg"
+                  >
+                    Track in Dashboard
+                  </button>
+                </div>
               </div>
             )}
           </div>

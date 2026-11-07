@@ -38,7 +38,7 @@ export function hashPassword(password: string): string {
 }
 
 // Middleware to authenticate JWT token
-export function authenticateUser(req: Request & { user?: AuthUser }, res: Response, next: NextFunction) {
+export async function authenticateUser(req: Request & { user?: AuthUser }, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next();
@@ -47,7 +47,7 @@ export function authenticateUser(req: Request & { user?: AuthUser }, res: Respon
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { id: number; username: string; email: string; role: string };
-    const user = db.prepare('SELECT id, username, email, role, free_fire_uid, free_fire_ign, is_blocked, is_deactivated FROM users WHERE id = ?').get(decoded.id) as unknown as AuthUser | undefined;
+    const user = (await db.prepare('SELECT id, username, email, role, free_fire_uid, free_fire_ign, is_blocked, is_deactivated FROM users WHERE id = ?').get(decoded.id)) as unknown as AuthUser | undefined;
 
     if (user && !user.is_blocked && !user.is_deactivated) {
       req.user = user;
@@ -92,9 +92,9 @@ export function requireRole(allowedRoles: string[]) {
 }
 
 // Log Admin Activity
-export function logAdminActivity(adminId: number | undefined, adminName: string, action: string, details: string, ipAddress = '127.0.0.1') {
+export async function logAdminActivity(adminId: number | undefined, adminName: string, action: string, details: string, ipAddress = '127.0.0.1') {
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_activity_logs (admin_id, admin_name, action, details, ip_address)
       VALUES (?, ?, ?, ?, ?)
     `).run(adminId || null, adminName, action, details, ipAddress);
