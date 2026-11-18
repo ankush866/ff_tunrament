@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   html, body {
@@ -10,14 +11,21 @@
   }
 
   body {
-    font-family: 'Inter', sans-serif;
-    background-color: #060910;
-    color: #f1f5f9;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
 
   h1, h2, h3, h4, .font-heading, .font-gaming {
-    font-family: 'Chakra Petch', 'Inter', sans-serif;
-    letter-spacing: 0.02em;
+    font-family: 'Chakra Petch', 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: 0.015em;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Prevent auto-zoom on mobile inputs in Safari/Chrome */
@@ -30,27 +38,19 @@
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #f97316;
-}
-
-/* Gaming glow utilities */
-.glow-orange {
-  box-shadow: 0 0 25px -5px rgba(249, 115, 22, 0.35);
-}
-.glow-red {
-  box-shadow: 0 0 25px -5px rgba(239, 68, 68, 0.35);
-}
-.glow-amber {
-  box-shadow: 0 0 25px -5px rgba(245, 158, 11, 0.35);
 }

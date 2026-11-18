@@ -1,19 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Home,
-  Trophy,
-  Flame,
-  MessageCircle,
-  User,
-  Shield,
-  Smartphone,
-  Monitor,
-  Wifi,
-  Battery,
-  Signal,
-  Sparkles
-} from 'lucide-react';
+import { Home, Trophy, Wallet, User } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
+import { ThemeProvider } from './context/ThemeContext.js';
 import { Navbar } from './components/Navbar.js';
 import { Footer } from './components/Footer.js';
 import { AuthModal } from './components/AuthModal.js';
@@ -34,34 +22,13 @@ function MainApp() {
   const [viewParams, setViewParams] = useState<any>({});
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'admin_login'>('login');
-  const [liveIstTime, setLiveIstTime] = useState('');
-  const [settings, setSettings] = useState<Record<string, string>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('flaxy_site_settings') || '{}');
-    } catch {
-      return {};
-    }
-  });
-  const [hasLiveTournament, setHasLiveTournament] = useState(false);
 
-  // Live IST Clock
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setLiveIstTime(now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Public Settings & Live Tournament status
+  // Keep site settings cached locally for footer/support
   useEffect(() => {
     const loadSettings = () => {
       apiRequest<{ settings: Record<string, string> }>('/settings/public')
         .then(res => {
           if (res.settings) {
-            setSettings(res.settings);
             try {
               localStorage.setItem('flaxy_site_settings', JSON.stringify(res.settings));
             } catch {}
@@ -72,20 +39,12 @@ function MainApp() {
 
     loadSettings();
     window.addEventListener('flaxy_settings_updated', loadSettings);
-
-    apiRequest<{ tournaments: any[] }>('/tournaments')
-      .then(res => {
-        const live = (res.tournaments || []).some(t => t.status === 'Live');
-        setHasLiveTournament(live);
-      })
-      .catch(() => {});
-
     return () => {
       window.removeEventListener('flaxy_settings_updated', loadSettings);
     };
   }, [currentView]);
 
-  // Handle URL hash or initial route
+  // Handle URL hash routes
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '');
@@ -107,8 +66,12 @@ function MainApp() {
         setCurrentView('leaderboard');
       } else if (hash === '/faq') {
         setCurrentView('faq');
+      } else if (hash === '/wallet') {
+        setCurrentView('dashboard');
+        setViewParams({ tab: 'payments' });
       } else if (hash === '/dashboard') {
         setCurrentView('dashboard');
+        setViewParams({ tab: 'overview' });
       } else if (hash === '/admin') {
         setCurrentView('admin');
       } else if (!hash || hash === '/' || hash === 'home') {
@@ -126,7 +89,6 @@ function MainApp() {
     setViewParams(params);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Sync hash
     if (view === 'home') window.location.hash = '';
     else if (view === 'tournaments') window.location.hash = '/tournaments';
     else if (view === 'live-rooms') window.location.hash = '/live-rooms';
@@ -134,6 +96,7 @@ function MainApp() {
     else if (view === 'faq') window.location.hash = '/faq';
     else if (view === 'tournament-detail' && params.id) window.location.hash = `/tournament/${params.id}`;
     else if (view === 'page' && params.slug) window.location.hash = `/page/${params.slug}`;
+    else if (view === 'dashboard' && params.tab === 'payments') window.location.hash = '/wallet';
     else if (view === 'dashboard') window.location.hash = '/dashboard';
     else if (view === 'admin') window.location.hash = '/admin';
   };
@@ -143,145 +106,147 @@ function MainApp() {
     setIsAuthOpen(true);
   };
 
-  const isStaff = user && ['super_admin', 'tournament_manager', 'payment_manager', 'content_manager', 'support_manager'].includes(user.role);
+  const isHomeActive = currentView === 'home';
+  const isMatchActive =
+    currentView === 'tournaments' ||
+    currentView === 'tournament-detail' ||
+    currentView === 'live-rooms';
+  const isWalletActive = currentView === 'dashboard' && viewParams.tab === 'payments';
+  const isProfileActive =
+    (currentView === 'dashboard' && viewParams.tab !== 'payments') ||
+    currentView === 'admin';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white pb-20 md:pb-0">
-      {/* Dynamic Navbar */}
-        <Navbar
-          currentView={currentView}
-          onNavigate={navigate}
-          onOpenAuth={openAuth}
-        />
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white pb-18 md:pb-0 transition-colors duration-200">
+      <Navbar
+        currentView={currentView}
+        onNavigate={navigate}
+        onOpenAuth={openAuth}
+      />
 
-        {/* Main View Router */}
-        <main className="flex-1">
-          {currentView === 'home' && (
-            <HomeView onNavigate={navigate} onOpenAuth={openAuth} />
-          )}
+      <main className="flex-1">
+        {currentView === 'home' && (
+          <HomeView onNavigate={navigate} onOpenAuth={openAuth} />
+        )}
 
-          {currentView === 'tournaments' && (
-            <TournamentsView onNavigate={navigate} onOpenAuth={openAuth} />
-          )}
+        {currentView === 'tournaments' && (
+          <TournamentsView onNavigate={navigate} onOpenAuth={openAuth} />
+        )}
 
-          {currentView === 'tournament-detail' && (
-            <TournamentDetailView
-              tournamentId={viewParams.id || 1}
-              onNavigate={navigate}
-              onOpenAuth={openAuth}
-            />
-          )}
+        {currentView === 'tournament-detail' && (
+          <TournamentDetailView
+            tournamentId={viewParams.id || 1}
+            onNavigate={navigate}
+            onOpenAuth={openAuth}
+          />
+        )}
 
-          {currentView === 'live-rooms' && (
-            <LiveRoomsView onNavigate={navigate} onOpenAuth={openAuth} />
-          )}
+        {currentView === 'live-rooms' && (
+          <LiveRoomsView onNavigate={navigate} onOpenAuth={openAuth} />
+        )}
 
-          {currentView === 'leaderboard' && (
-            <LeaderboardView onNavigate={navigate} />
-          )}
+        {currentView === 'leaderboard' && (
+          <LeaderboardView onNavigate={navigate} />
+        )}
 
-          {currentView === 'page' && (
-            <PageView slug={viewParams.slug || 'about-us'} onNavigate={navigate} />
-          )}
+        {currentView === 'page' && (
+          <PageView slug={viewParams.slug || 'about-us'} onNavigate={navigate} />
+        )}
 
-          {currentView === 'faq' && (
-            <FaqView onNavigate={navigate} />
-          )}
+        {currentView === 'faq' && (
+          <FaqView onNavigate={navigate} />
+        )}
 
-          {currentView === 'dashboard' && (
-            <DashboardView
-              initialTab={viewParams.tab || 'overview'}
-              onNavigate={navigate}
-            />
-          )}
+        {currentView === 'dashboard' && (
+          <DashboardView
+            initialTab={viewParams.tab || 'overview'}
+            onNavigate={navigate}
+          />
+        )}
 
-          {currentView === 'admin' && (
-            <AdminPanelView onNavigate={navigate} onOpenAuth={openAuth} />
-          )}
-        </main>
+        {currentView === 'admin' && (
+          <AdminPanelView onNavigate={navigate} onOpenAuth={openAuth} />
+        )}
+      </main>
 
-        {/* Dynamic Footer */}
-        <Footer onNavigate={navigate} />
+      <Footer onNavigate={navigate} />
 
-        {/* Mobile Bottom Navigation Dock (Native Smartphone App Experience) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-slate-800">
-          <div className="max-w-md mx-auto flex items-center justify-around py-2 px-2">
-            {/* 1. Home */}
-            <button
-              onClick={() => navigate('home')}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 transition-all ${
-                currentView === 'home' ? 'text-orange-500 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Home className="w-5 h-5" />
-              <span className="text-[10px]">Home</span>
-            </button>
+      {/* Mobile Bottom Navigation: Strictly 4 Simple Options (Home, Match, Wallet, Profile) */}
+      <nav
+        aria-label="Primary bottom navigation"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)]"
+      >
+        <div className="max-w-lg mx-auto grid grid-cols-4 items-center h-16 px-2">
+          {/* 1. Home */}
+          <button
+            type="button"
+            onClick={() => navigate('home')}
+            className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors whitespace-nowrap ${
+              isHomeActive
+                ? 'text-orange-600 dark:text-orange-400 font-bold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-medium'
+            }`}
+          >
+            <Home className="w-5 h-5" strokeWidth={isHomeActive ? 2.4 : 2} />
+            <span className="text-[11px] leading-tight">Home</span>
+          </button>
 
-            {/* 2. Tournaments */}
-            <button
-              onClick={() => navigate('tournaments')}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 transition-all ${
-                currentView === 'tournaments' || currentView === 'tournament-detail'
-                  ? 'text-orange-500 font-bold scale-105'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Trophy className="w-5 h-5" />
-              <span className="text-[10px]">Tournaments</span>
-            </button>
+          {/* 2. Match */}
+          <button
+            type="button"
+            onClick={() => navigate('tournaments')}
+            className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors whitespace-nowrap ${
+              isMatchActive
+                ? 'text-orange-600 dark:text-orange-400 font-bold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-medium'
+            }`}
+          >
+            <Trophy className="w-5 h-5" strokeWidth={isMatchActive ? 2.4 : 2} />
+            <span className="text-[11px] leading-tight">Match</span>
+          </button>
 
-            {/* 3. Live Rooms (With Pulsing Indicator) */}
-            <button
-              onClick={() => navigate('live-rooms')}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 relative transition-all ${
-                currentView === 'live-rooms' ? 'text-red-500 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <div className="relative">
-                <Flame className="w-5 h-5 text-red-500" />
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
-              </div>
-              <span className="text-[10px]">Live Room</span>
-            </button>
+          {/* 3. Wallet */}
+          <button
+            type="button"
+            onClick={() => {
+              if (user) {
+                navigate('dashboard', { tab: 'payments' });
+              } else {
+                openAuth('login');
+              }
+            }}
+            className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors whitespace-nowrap ${
+              isWalletActive
+                ? 'text-orange-600 dark:text-orange-400 font-bold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-medium'
+            }`}
+          >
+            <Wallet className="w-5 h-5" strokeWidth={isWalletActive ? 2.4 : 2} />
+            <span className="text-[11px] leading-tight">Wallet</span>
+          </button>
 
-            {/* 4. Support WhatsApp Direct */}
-            <a
-              href={settings.whatsapp_url || `https://wa.me/${(settings.whatsapp_number || '919876543210').replace(/[^0-9]/g, '')}?text=Hello%20Flaxy%20Admin%2C%20I%20need%20tournament%20help`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex flex-col items-center justify-center gap-0.5 flex-1 text-emerald-400 hover:text-emerald-300 transition-all hover:scale-105"
-            >
-              <MessageCircle className="w-5 h-5 text-emerald-400" />
-              <span className="text-[10px] font-semibold">WhatsApp</span>
-            </a>
+          {/* 4. Profile */}
+          <button
+            type="button"
+            onClick={() => {
+              if (user) {
+                navigate('dashboard', { tab: 'overview' });
+              } else {
+                openAuth('login');
+              }
+            }}
+            className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors whitespace-nowrap ${
+              isProfileActive
+                ? 'text-orange-600 dark:text-orange-400 font-bold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-medium'
+            }`}
+          >
+            <User className="w-5 h-5" strokeWidth={isProfileActive ? 2.4 : 2} />
+            <span className="text-[11px] leading-tight">{user ? 'Profile' : 'Login'}</span>
+          </button>
+        </div>
+      </nav>
 
-            {/* 5. User Profile / Login */}
-            {user ? (
-              <button
-                onClick={() => navigate('dashboard')}
-                className={`flex flex-col items-center justify-center gap-0.5 flex-1 transition-all ${
-                  currentView === 'dashboard'
-                    ? 'text-orange-500 font-bold scale-105'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <User className="w-5 h-5" />
-                <span className="text-[10px]">Profile</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => openAuth('login')}
-                className="flex flex-col items-center justify-center gap-0.5 flex-1 text-orange-400 hover:text-orange-300 transition-all font-semibold"
-              >
-                <User className="w-5 h-5 text-orange-500" />
-                <span className="text-[10px]">Login</span>
-              </button>
-            )}
-          </div>
-        </nav>
-
-      {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
@@ -294,8 +259,10 @@ function MainApp() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

@@ -8,16 +8,18 @@ import {
   LogOut,
   Menu,
   X,
-  CreditCard,
+  Wallet,
   Users,
   Settings,
   HelpCircle,
-  Clock,
-  Sparkles,
+  Sun,
+  Moon,
   ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
+import { useTheme } from '../context/ThemeContext.js';
 import { apiRequest, formatISTDateTime } from '../lib/api.js';
+import { DEFAULT_PLAYER_AVATAR, getSafeImageUrl } from '../lib/assets.js';
 
 interface NavbarProps {
   currentView: string;
@@ -27,7 +29,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenAuth }) => {
   const { user, logout, notifications, unreadCount, markNotificationRead, markAllNotificationsRead } = useAuth();
-  const [navItems, setNavItems] = useState<{ label: string; url: string }[]>([]);
+  const { isDark, toggleTheme } = useTheme();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -35,185 +37,176 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
   const [siteName, setSiteName] = useState('FLAXY ESPORTS');
 
   useEffect(() => {
-    // Fetch CMS navigation items
-    apiRequest<{ items: any[] }>('/cms/navigation')
-      .then(res => {
-        const headerItems = (res.items || []).filter(item => !item.is_footer && item.is_visible);
-        if (headerItems.length > 0) {
-          setNavItems(headerItems);
-        } else {
-          // Defaults
-          setNavItems([
-            { label: 'Home', url: '/' },
-            { label: 'Tournaments', url: '/tournaments' },
-            { label: 'Live Rooms', url: '/live-rooms' },
-            { label: 'Leaderboard', url: '/leaderboard' },
-            { label: 'Rules', url: '/page/tournament-rules' },
-            { label: 'FAQ', url: '/faq' }
-          ]);
-        }
-      })
-      .catch(() => {
-        setNavItems([
-          { label: 'Home', url: '/' },
-          { label: 'Tournaments', url: '/tournaments' },
-          { label: 'Live Rooms', url: '/live-rooms' },
-          { label: 'Leaderboard', url: '/leaderboard' },
-          { label: 'Rules', url: '/page/tournament-rules' },
-          { label: 'FAQ', url: '/faq' }
-        ]);
-      });
-
-    // Fetch announcements
     apiRequest<{ announcements: any[] }>('/announcements')
       .then(res => setAnnouncements(res.announcements || []))
       .catch(() => {});
 
-    // Fetch site name
-    apiRequest<{ settings: Record<string, string> }>('/settings/public')
-      .then(res => {
-        if (res.settings?.site_name) setSiteName(res.settings.site_name);
-      })
-      .catch(() => {});
-  }, []);
+    const loadSiteName = () => {
+      apiRequest<{ settings: Record<string, string> }>('/settings/public')
+        .then(res => {
+          if (res.settings?.site_name) setSiteName(res.settings.site_name);
+        })
+        .catch(() => {});
+    };
 
-  const handleNavClick = (url: string) => {
-    setShowMobileMenu(false);
-    if (url === '/') onNavigate('home');
-    else if (url === '/tournaments') onNavigate('tournaments');
-    else if (url === '/live-rooms') onNavigate('live-rooms');
-    else if (url === '/leaderboard') onNavigate('leaderboard');
-    else if (url === '/faq') onNavigate('faq');
-    else if (url.startsWith('/page/')) {
-      const slug = url.replace('/page/', '');
-      onNavigate('page', { slug });
-    } else {
-      onNavigate('home');
-    }
-  };
+    loadSiteName();
+    window.addEventListener('flaxy_settings_updated', loadSiteName);
+    return () => window.removeEventListener('flaxy_settings_updated', loadSiteName);
+  }, []);
 
   const isStaff = user && ['super_admin', 'tournament_manager', 'payment_manager', 'content_manager', 'support_manager'].includes(user.role);
 
+  const navLinks = [
+    { id: 'home', label: 'Home' },
+    { id: 'tournaments', label: 'Match' },
+    { id: 'live-rooms', label: 'Live Room' },
+    { id: 'leaderboard', label: 'Rankings' },
+    { id: 'faq', label: 'FAQ' }
+  ];
+
   return (
-    <header className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80">
-      {/* Top Urgent Announcement Banner */}
-      {announcements.length > 0 && announcements[0].is_banner_visible && (
-        <div className={`px-4 py-1.5 text-xs text-center font-medium flex items-center justify-center gap-2 ${
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
+      {/* Compact Urgent Banner */}
+      {announcements.length > 0 && announcements[0].is_banner_visible === 1 && (
+        <div className={`px-3 py-1 text-xs text-center font-medium flex items-center justify-center gap-2 ${
           announcements[0].banner_type === 'urgent'
-            ? 'bg-gradient-to-r from-red-600 via-orange-600 to-red-600 text-white font-semibold animate-pulse'
-            : 'bg-orange-500/10 text-orange-400 border-b border-orange-500/20'
+            ? 'bg-orange-600 text-white font-semibold'
+            : 'bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300 border-b border-orange-200 dark:border-orange-500/20'
         }`}>
           <Flame className="w-3.5 h-3.5 shrink-0" />
-          <span>{announcements[0].title}</span>
-          <span className="hidden md:inline text-white/80 font-normal">— {announcements[0].content}</span>
+          <span className="truncate">{announcements[0].title}</span>
         </div>
       )}
 
-      {/* Main Navbar */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Brand Logo */}
-        <div className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none min-w-0" onClick={() => onNavigate('home')}>
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-orange-500 via-red-500 to-amber-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-orange-400/30 shrink-0">
-            <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+      {/* Main Single-Row Top Bar */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
+        {/* Zone 1: Brand Wordmark */}
+        <button
+          type="button"
+          onClick={() => onNavigate('home')}
+          className="flex items-center gap-2.5 cursor-pointer select-none min-w-0 text-left shrink-0"
+        >
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-sm shrink-0">
+            <Flame className="w-5 h-5 text-white" />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-gaming font-extrabold text-base sm:text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-300 to-red-500 truncate">
-                {siteName}
-              </span>
-              <span className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 shrink-0">
-                ESPORTS
-              </span>
-            </div>
-            <div className="text-[10px] text-slate-400 uppercase tracking-widest hidden sm:block">
-              Free Fire Arena
-            </div>
-          </div>
-        </div>
+          <span className="font-gaming font-bold text-base sm:text-lg tracking-wide text-slate-900 dark:text-white whitespace-nowrap shrink-0">
+            {siteName}
+          </span>
+        </button>
 
-        {/* Desktop Navigation Links */}
+        {/* Zone 2: Clean Desktop Links */}
         <nav className="hidden lg:flex items-center gap-1">
-          {navItems.map((item, idx) => {
+          {navLinks.map(link => {
             const isActive =
-              (item.url === '/' && currentView === 'home') ||
-              (item.url === '/tournaments' && currentView === 'tournaments') ||
-              (item.url === '/live-rooms' && currentView === 'live-rooms') ||
-              (item.url === '/leaderboard' && currentView === 'leaderboard') ||
-              (item.url === '/faq' && currentView === 'faq');
-
+              currentView === link.id ||
+              (link.id === 'tournaments' && currentView === 'tournament-detail');
             return (
               <button
-                key={idx}
-                onClick={() => handleNavClick(item.url)}
-                className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+                key={link.id}
+                type="button"
+                onClick={() => onNavigate(link.id)}
+                className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
                   isActive
-                    ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/10'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 font-semibold'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/70'
                 }`}
               >
-                {item.url === '/live-rooms' && (
-                  <span className="relative flex h-2 w-2 mr-0.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                  </span>
-                )}
-                {item.label}
+                {link.label}
               </button>
             );
           })}
-        </nav>
-
-        {/* Right Section: Admin, Notifications, Auth */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-
-          {/* Admin Panel Direct Button (if staff, desktop only) */}
-          {isStaff && (
+          {user && (
             <button
-              onClick={() => onNavigate('admin')}
-              className={`hidden md:flex px-3 py-1.5 text-xs font-bold rounded-lg transition-all items-center gap-1.5 ${
-                currentView === 'admin'
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
-                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
+              type="button"
+              onClick={() => onNavigate('dashboard', { tab: 'payments' })}
+              className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                currentView === 'dashboard'
+                  ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 font-semibold'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/70'
               }`}
             >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Admin Panel</span>
+              Wallet
+            </button>
+          )}
+        </nav>
+
+        {/* Zone 3: 1-Click Theme Switch, Admin, Notifications, Account */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* 1-Click Dark / Light Mode Toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            title={isDark ? 'Light Mode' : 'Dark Mode'}
+            className="min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            {isDark ? (
+              <>
+                <Sun className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="hidden sm:inline">Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4 text-slate-700 shrink-0" />
+                <span className="hidden sm:inline">Dark</span>
+              </>
+            )}
+          </button>
+
+          {/* Admin Panel Direct Button (if staff) */}
+          {isStaff && (
+            <button
+              type="button"
+              onClick={() => onNavigate('admin')}
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                currentView === 'admin'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25'
+              }`}
+            >
+              <Shield className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">Admin</span>
             </button>
           )}
 
-          {/* Notifications Icon (if user logged in) */}
+          {/* Notifications */}
           {user && (
             <div className="relative">
               <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800/60 relative"
+                type="button"
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  setShowUserMenu(false);
+                }}
+                aria-label="Notifications"
+                className="min-h-[40px] min-w-[40px] p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 relative flex items-center justify-center cursor-pointer"
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="w-4.5 h-4.5" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-orange-500 text-[10px] font-bold text-white rounded-full flex items-center justify-center">
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-orange-600 text-[10px] font-bold text-white rounded-full flex items-center justify-center tabular-nums">
                     {unreadCount}
                   </span>
                 )}
               </button>
 
-              {/* Notification Drawer Popover */}
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-4 z-50">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <span className="font-semibold text-sm text-slate-100 flex items-center gap-1.5">
-                      <Bell className="w-4 h-4 text-orange-400" />
+                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-4 z-50">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800">
+                    <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <Bell className="w-4 h-4 text-orange-500" />
                       Notifications
                     </span>
                     {unreadCount > 0 && (
                       <button
+                        type="button"
                         onClick={markAllNotificationsRead}
-                        className="text-xs text-orange-400 hover:underline"
+                        className="text-xs text-orange-600 dark:text-orange-400 font-semibold hover:underline"
                       >
-                        Mark all as read
+                        Mark all read
                       </button>
                     )}
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-800/60 mt-2 space-y-1">
+                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/70 mt-2 space-y-1">
                     {notifications.length === 0 ? (
                       <div className="text-center py-6 text-xs text-slate-500">
                         No notifications yet.
@@ -225,12 +218,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                           onClick={() => {
                             if (!item.is_read) markNotificationRead(item.id);
                           }}
-                          className={`p-2.5 rounded-lg text-xs cursor-pointer transition-colors ${
-                            item.is_read ? 'opacity-70 hover:opacity-100' : 'bg-orange-500/10 border-l-2 border-orange-500'
+                          className={`p-2.5 rounded-xl text-xs cursor-pointer transition-colors ${
+                            item.is_read
+                              ? 'opacity-70 hover:opacity-100'
+                              : 'bg-orange-50 dark:bg-orange-500/10'
                           }`}
                         >
-                          <div className="font-semibold text-slate-200">{item.title}</div>
-                          <div className="text-slate-400 mt-0.5">{item.message}</div>
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">{item.title}</div>
+                          <div className="text-slate-600 dark:text-slate-400 mt-0.5">{item.message}</div>
                           <div className="text-[10px] text-slate-500 mt-1">{formatISTDateTime(item.created_at)}</div>
                         </div>
                       ))
@@ -241,114 +236,100 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             </div>
           )}
 
-          {/* User Account or Login CTA */}
+          {/* User Dropdown or Login CTA */}
           {user ? (
             <div className="relative">
               <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-800/60 border border-slate-800 transition-all"
+                type="button"
+                onClick={() => {
+                  setShowUserMenu(!showUserMenu);
+                  setShowNotifications(false);
+                }}
+                className="min-h-[40px] flex items-center gap-2 px-1.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
               >
                 <img
-                  src={user.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
+                  src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
                   alt={user.username}
-                  className="w-8 h-8 rounded-lg object-cover border border-orange-500/40"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR; }}
+                  className="w-7 h-7 rounded-lg object-cover border border-orange-500/40 shrink-0"
                 />
-                <div className="text-left hidden sm:block">
-                  <div className="text-xs font-semibold text-slate-100 leading-tight flex items-center gap-1">
-                    {user.free_fire_ign || user.username}
-                  </div>
-                  <div className="text-[10px] text-slate-400 leading-tight">
-                    UID: {user.free_fire_uid || 'N/A'}
-                  </div>
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+                <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 hidden sm:inline max-w-[100px] truncate">
+                  {user.free_fire_ign || user.username}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden sm:block shrink-0" />
               </button>
 
-              {/* User Dropdown */}
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50">
-                  <div className="px-3 py-2 border-b border-slate-800 mb-1">
-                    <div className="font-semibold text-xs text-slate-200">{user.full_name || user.username}</div>
-                    <div className="text-[11px] text-slate-400">{user.email}</div>
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-2 z-50">
+                  <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 mb-1">
+                    <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">{user.full_name || user.username}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</div>
                   </div>
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onNavigate('dashboard', { tab: 'overview' });
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg flex items-center gap-2"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'overview' }); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2"
                   >
-                    <UserIcon className="w-4 h-4 text-orange-400" />
-                    <span>User Dashboard</span>
+                    <UserIcon className="w-4 h-4 text-orange-500" />
+                    <span>My Profile</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onNavigate('dashboard', { tab: 'tournaments' });
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg flex items-center gap-2"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'payments' }); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2"
                   >
-                    <Trophy className="w-4 h-4 text-amber-400" />
-                    <span>My Tournaments</span>
+                    <Wallet className="w-4 h-4 text-emerald-500" />
+                    <span>Wallet & Payments</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onNavigate('dashboard', { tab: 'matches' });
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg flex items-center gap-2"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'tournaments' }); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2"
                   >
-                    <Flame className="w-4 h-4 text-orange-400" />
+                    <Trophy className="w-4 h-4 text-amber-500" />
                     <span>My Matches</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onNavigate('dashboard', { tab: 'teams' });
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg flex items-center gap-2"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'teams' }); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2"
                   >
-                    <Users className="w-4 h-4 text-emerald-400" />
-                    <span>My Duo Teams</span>
+                    <Users className="w-4 h-4 text-cyan-500" />
+                    <span>Duo Teams</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onNavigate('dashboard', { tab: 'payments' });
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg flex items-center gap-2"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'support' }); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2"
                   >
-                    <CreditCard className="w-4 h-4 text-cyan-400" />
-                    <span>Payment History</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onNavigate('dashboard', { tab: 'support' });
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg flex items-center gap-2"
-                  >
-                    <HelpCircle className="w-4 h-4 text-purple-400" />
+                    <HelpCircle className="w-4 h-4 text-purple-500" />
                     <span>Support Tickets</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onNavigate('dashboard', { tab: 'settings' });
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg flex items-center gap-2"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'settings' }); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2"
                   >
-                    <Settings className="w-4 h-4 text-slate-400" />
+                    <Settings className="w-4 h-4 text-slate-500" />
                     <span>Account Settings</span>
                   </button>
+                  {isStaff && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowUserMenu(false); onNavigate('admin'); }}
+                      className="w-full text-left px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 rounded-lg flex items-center gap-2"
+                    >
+                      <Shield className="w-4 h-4" />
+                      <span>Admin Panel</span>
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      logout();
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-2 border-t border-slate-800 mt-1"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); logout(); }}
+                    className="w-full text-left px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-2 border-t border-slate-200 dark:border-slate-800 mt-1"
                   >
-                    <LogOut className="w-4 h-4 text-red-400" />
+                    <LogOut className="w-4 h-4" />
                     <span>Sign Out</span>
                   </button>
                 </div>
@@ -356,68 +337,64 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             </div>
           ) : (
             <button
+              type="button"
               onClick={() => onOpenAuth('login')}
-              className="px-3.5 py-2 sm:px-5 sm:py-2.5 text-xs font-gaming font-bold bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-xl shadow-md shadow-orange-500/25 transition-all flex items-center gap-1.5 tracking-wider shrink-0 cursor-pointer"
+              className="min-h-[40px] px-4 py-2 text-xs font-gaming font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-sm transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <UserIcon className="w-3.5 h-3.5" />
+              <UserIcon className="w-3.5 h-3.5 shrink-0" />
               <span>Login</span>
             </button>
           )}
 
-          {/* Mobile menu toggle */}
+          {/* Mobile Drawer Trigger */}
           <button
+            type="button"
             onClick={() => setShowMobileMenu(!showMobileMenu)}
-            className="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 shrink-0"
-            aria-label="Toggle navigation menu"
+            className="lg:hidden min-h-[40px] min-w-[40px] p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0 cursor-pointer"
+            aria-label="Toggle menu"
           >
             {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu Drawer */}
+      {/* Compact Mobile Drawer */}
       {showMobileMenu && (
-        <div className="lg:hidden bg-slate-950 border-b border-slate-800 px-4 py-4 space-y-2">
-          {navItems.map((item, idx) => (
+        <div className="lg:hidden bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 px-4 py-3 space-y-1.5">
+          {navLinks.map(link => (
             <button
-              key={idx}
-              onClick={() => handleNavClick(item.url)}
-              className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-800/80 rounded-lg"
+              key={link.id}
+              type="button"
+              onClick={() => { setShowMobileMenu(false); onNavigate(link.id); }}
+              className="w-full text-left px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
             >
-              {item.label}
+              {link.label}
             </button>
           ))}
           {isStaff && (
             <button
-              onClick={() => {
-                setShowMobileMenu(false);
-                onNavigate('admin');
-              }}
-              className="w-full text-left px-3 py-2 text-sm text-amber-400 bg-amber-500/10 rounded-lg font-bold flex items-center gap-2"
+              type="button"
+              onClick={() => { setShowMobileMenu(false); onNavigate('admin'); }}
+              className="w-full text-left px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded-xl font-bold flex items-center gap-2"
             >
               <Shield className="w-4 h-4" />
               <span>Admin Panel</span>
             </button>
           )}
-          {!user && (
+          {!user ? (
             <button
-              onClick={() => {
-                setShowMobileMenu(false);
-                onOpenAuth('login');
-              }}
-              className="w-full mt-2 py-2.5 px-4 text-xs font-gaming font-bold bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl shadow-md flex items-center justify-center gap-2 tracking-wider"
+              type="button"
+              onClick={() => { setShowMobileMenu(false); onOpenAuth('login'); }}
+              className="w-full mt-2 py-2.5 px-4 text-xs font-gaming font-bold bg-orange-600 text-white rounded-xl flex items-center justify-center gap-2"
             >
               <UserIcon className="w-3.5 h-3.5" />
               <span>Login / Register</span>
             </button>
-          )}
-          {user && (
+          ) : (
             <button
-              onClick={() => {
-                setShowMobileMenu(false);
-                logout();
-              }}
-              className="w-full mt-2 py-2 px-4 text-xs font-semibold text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-xl flex items-center justify-center gap-2"
+              type="button"
+              onClick={() => { setShowMobileMenu(false); logout(); }}
+              className="w-full mt-2 py-2.5 px-4 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-500/10 rounded-xl flex items-center justify-center gap-2"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out ({user.username})</span>
