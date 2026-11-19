@@ -120,10 +120,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   const [usersList, setUsersList] = useState<any[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'active' | 'blocked' | 'staff'>('all');
-  const [resetModalUser, setResetModalUser] = useState<any>(null);
-  const [newPasswordInput, setNewPasswordInput] = useState('');
-  const [resetPasswordSuccess, setResetPasswordSuccess] = useState('');
-  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
 
   // Support Tickets
   const [adminTickets, setAdminTickets] = useState<any[]>([]);
@@ -291,7 +287,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     }
   };
 
-  const handleVerifyPayment = async (paymentId: number, status: 'approved' | 'rejected', reason = '') => {
+  const handleVerifyPayment = async (paymentId: string | number, status: 'approved' | 'rejected', reason = '') => {
     try {
       await apiRequest(`/admin/payments/${paymentId}/verify`, {
         method: 'POST',
@@ -359,7 +355,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     }
   };
 
-  const handleViewVersions = async (pageId: number) => {
+  const handleViewVersions = async (pageId: string | number) => {
     try {
       const res = await apiRequest<{ versions: any[] }>(`/cms/pages/${pageId}/versions`);
       setPageVersions(res.versions || []);
@@ -369,7 +365,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     }
   };
 
-  const handleRestoreVersion = async (pageId: number, versionNum: number) => {
+  const handleRestoreVersion = async (pageId: string | number, versionNum: number) => {
     if (!confirm(`Restore this page back to Version ${versionNum}?`)) return;
     try {
       await apiRequest(`/cms/pages/${pageId}/restore/${versionNum}`, { method: 'POST' });
@@ -399,7 +395,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     }
   };
 
-  const handleUpdateUser = async (userId: number, targetRole: string, isBlocked: boolean) => {
+  const handleUpdateUser = async (userId: string | number, targetRole: string, isBlocked: boolean) => {
     const actionText = isBlocked ? 'BLOCK' : 'UNBLOCK';
     if (!window.confirm(`Confirm ${actionText} / role update for this user account?`)) {
       return;
@@ -414,37 +410,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     } catch (err: any) {
       alert(err.message);
     }
-  };
-
-  const handleAdminResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetModalUser || !newPasswordInput.trim()) return;
-    setResetPasswordLoading(true);
-    try {
-      await apiRequest(`/admin/users/${resetModalUser.id}/reset-password`, {
-        method: 'PUT',
-        body: JSON.stringify({ new_password: newPasswordInput.trim() })
-      });
-      setResetPasswordSuccess(`Password updated for ${resetModalUser.username}.`);
-      setTimeout(() => {
-        setResetModalUser(null);
-        setNewPasswordInput('');
-        setResetPasswordSuccess('');
-      }, 2200);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setResetPasswordLoading(false);
-    }
-  };
-
-  const handleGeneratePassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
-    let pass = 'Flx@';
-    for (let i = 0; i < 6; i++) {
-      pass += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setNewPasswordInput(pass);
   };
 
   const handleQrFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -468,7 +433,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     }
   };
 
-  const handleAdminTicketReply = async (ticketId: number) => {
+  const handleAdminTicketReply = async (ticketId: string | number) => {
     if (!ticketReplyText.trim()) return;
     try {
       await apiRequest(`/tickets/${ticketId}/reply`, {
@@ -484,7 +449,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     }
   };
 
-  const handleUpdateTicketStatus = async (ticketId: number, status: string) => {
+  const handleUpdateTicketStatus = async (ticketId: string | number, status: string) => {
     try {
       await apiRequest(`/admin/tickets/${ticketId}/status`, {
         method: 'PUT',
@@ -530,18 +495,18 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
             onClick={() => onNavigate('home')}
-            className="w-full sm:w-auto px-5 py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 min-h-[44px]"
+            className="w-full sm:w-auto px-5 py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
           >
             <Home className="w-4 h-4" />
             <span>Back to Home</span>
           </button>
-          {!user && onOpenAuth && (
+          {onOpenAuth && (
             <button
               onClick={() => onOpenAuth('admin_login')}
-              className="w-full sm:w-auto px-5 py-3 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 font-gaming font-semibold text-xs rounded-xl flex items-center justify-center gap-2 min-h-[44px]"
+              className="w-full sm:w-auto px-5 py-3 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 font-gaming font-semibold text-xs rounded-xl flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
             >
               <Key className="w-4 h-4 text-amber-500" />
-              <span>Admin Login</span>
+              <span>{user ? 'Switch to Admin Account' : 'Admin Login'}</span>
             </button>
           )}
         </div>
@@ -828,7 +793,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                 USER MANAGEMENT
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Search players, Block/Unblock accounts, reset passwords, and change roles.
+                Search players, Block/Unblock accounts, and change staff roles.
               </p>
             </div>
             <input
@@ -943,19 +908,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                       <option value="support_manager">Support Mgr</option>
                     </select>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setResetModalUser(u);
-                        setNewPasswordInput('');
-                        setResetPasswordSuccess('');
-                      }}
-                      className="px-3 py-1.5 rounded-xl font-bold text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 min-h-[36px]"
-                    >
-                      <Key className="w-3.5 h-3.5" />
-                      <span>Reset Pass</span>
-                    </button>
-
                     {u.is_blocked ? (
                       <button
                         type="button"
@@ -979,99 +931,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                 </div>
               ))}
           </div>
-
-          {resetModalUser && (
-            <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold font-gaming text-base">
-                    <Key className="w-5 h-5" />
-                    RESET USER PASSWORD
-                  </div>
-                  <button
-                    onClick={() => setResetModalUser(null)}
-                    className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-0.5">
-                  <div className="text-slate-900 dark:text-white font-bold text-sm">{resetModalUser.username}</div>
-                  <div className="text-slate-500 dark:text-slate-400">{resetModalUser.email}</div>
-                  <div className="text-[11px] text-slate-500 font-mono">
-                    UID: {resetModalUser.free_fire_uid || 'N/A'} • Role: {resetModalUser.role}
-                  </div>
-                </div>
-
-                {resetPasswordSuccess && (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs rounded-xl flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>{resetPasswordSuccess}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleAdminResetPassword} className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        New Password
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleGeneratePassword}
-                        className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline font-semibold"
-                      >
-                        Generate Random
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        value={newPasswordInput}
-                        onChange={e => setNewPasswordInput(e.target.value)}
-                        placeholder="Enter new password (min 6 chars)"
-                        className={`${inputCls} pr-16 font-mono`}
-                      />
-                      {newPasswordInput && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(newPasswordInput);
-                            alert('Copied!');
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded text-[10px] font-semibold"
-                        >
-                          Copy
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      Encrypted with bcrypt before saving to PostgreSQL database.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setResetModalUser(null)}
-                      className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={resetPasswordLoading || !newPasswordInput.trim()}
-                      className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-gaming font-bold text-xs rounded-xl"
-                    >
-                      {resetPasswordLoading ? 'Saving...' : 'Confirm Reset'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
         </div>
       )}
 

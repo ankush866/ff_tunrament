@@ -14,6 +14,7 @@ import { PageView } from './views/PageView.js';
 import { FaqView } from './views/FaqView.js';
 import { DashboardView } from './views/DashboardView.js';
 import { AdminPanelView } from './views/admin/AdminPanelView.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { apiRequest } from './lib/api.js';
 
 function MainApp() {
@@ -49,7 +50,7 @@ function MainApp() {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '');
       if (hash.startsWith('/tournament/')) {
-        const id = parseInt(hash.replace('/tournament/', ''), 10);
+        const id = hash.replace('/tournament/', '').trim();
         if (id) {
           setCurrentView('tournament-detail');
           setViewParams({ id });
@@ -259,10 +260,12 @@ function MainApp() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <MainApp />
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <MainApp />
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

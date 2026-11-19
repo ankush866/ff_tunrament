@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import cors from 'cors';
@@ -10,12 +11,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
-  // Initialize DB, Supabase schema and seed data
-  await initDatabase();
+  // Optional legacy SQL init (app uses Firebase Auth + Cloud Firestore by default)
+  try {
+    if (db.isPostgres) {
+      await initDatabase();
+    }
+  } catch (err) {
+    console.warn('[SERVER] Continuing with Firebase persistence (SQL DB skipped):', (err as Error).message);
+  }
 
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   const isProd = process.env.NODE_ENV === 'production';
+  const PORT = isProd && process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(cors());
   app.use(express.json({ limit: '15mb' }));
@@ -26,37 +33,43 @@ async function startServer() {
 
   // Health check
   app.get('/api/health', (req: Request, res: Response) => {
-    res.json({ status: 'ok', time: new Date().toISOString(), timezone: 'Asia/Kolkata', isPostgres: db.isPostgres });
+    res.json({
+      status: 'ok',
+      time: new Date().toISOString(),
+      timezone: 'Asia/Kolkata',
+      database: 'firebase-firestore',
+      isPostgres: db.isPostgres
+    });
   });
 
-  // Dynamic Sitemap.xml Generator (Requirement 16)
+  // Dynamic Sitemap.xml Generator
   app.get('/sitemap.xml', async (req: Request, res: Response) => {
+    const baseUrl = process.env.APP_URL || 'https://flaxy.gg';
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+    xml += `  <url><loc>${baseUrl}/</loc><changefreq>always</changefreq><priority>1.0</priority></url>\n`;
+    xml += `  <url><loc>${baseUrl}/tournaments</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>\n`;
+    xml += `  <url><loc>${baseUrl}/live-rooms</loc><changefreq>always</changefreq><priority>0.9</priority></url>\n`;
+    xml += `  <url><loc>${baseUrl}/leaderboard</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n`;
+    xml += `  <url><loc>${baseUrl}/faq</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>\n`;
+
     try {
-      const pages = (await db.prepare('SELECT slug, updated_at FROM website_pages WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
-      const tournaments = (await db.prepare('SELECT slug, updated_at FROM tournaments WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
-
-      const baseUrl = process.env.APP_URL || 'https://flaxy.gg';
-
-      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
-      xml += `  <url><loc>${baseUrl}/</loc><changefreq>always</changefreq><priority>1.0</priority></url>\n`;
-      xml += `  <url><loc>${baseUrl}/tournaments</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>\n`;
-      xml += `  <url><loc>${baseUrl}/live-rooms</loc><changefreq>always</changefreq><priority>0.9</priority></url>\n`;
-      xml += `  <url><loc>${baseUrl}/leaderboard</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n`;
-      xml += `  <url><loc>${baseUrl}/faq</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>\n`;
-
-      for (const p of pages) {
-        xml += `  <url><loc>${baseUrl}/page/${p.slug}</loc><lastmod>${new Date(p.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.8</priority></url>\n`;
+      if (db.isPostgres) {
+        const pages = (await db.prepare('SELECT slug, updated_at FROM website_pages WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
+        const tournaments = (await db.prepare('SELECT slug, updated_at FROM tournaments WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
+        for (const p of pages) {
+          xml += `  <url><loc>${baseUrl}/page/${p.slug}</loc><lastmod>${new Date(p.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.8</priority></url>\n`;
+        }
+        for (const t of tournaments) {
+          xml += `  <url><loc>${baseUrl}/tournament/${t.slug}</loc><lastmod>${new Date(t.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.85</priority></url>\n`;
+        }
       }
-      for (const t of tournaments) {
-        xml += `  <url><loc>${baseUrl}/tournament/${t.slug}</loc><lastmod>${new Date(t.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.85</priority></url>\n`;
-      }
-      xml += `</urlset>`;
-
-      res.setHeader('Content-Type', 'application/xml');
-      res.send(xml);
     } catch {
-      res.status(500).send('Error generating sitemap');
+      // Serve core sitemap URLs even if legacy SQL is unused
     }
+
+    xml += `</urlset>`;
+    res.setHeader('Content-Type', 'application/xml');
+    res.send(xml);
   });
 
   // Robots.txt

@@ -250,7 +250,7 @@ apiRouter.post('/auth/deactivate', requireAuth, async (req: Request & { user?: A
 // 2. TOURNAMENTS MANAGEMENT & LIVE STATS
 // ==========================================
 
-// Live Real-Time Public Statistics (Calculated dynamically from SQLite Database)
+// Live Real-Time Public Statistics (Calculated dynamically from Database)
 apiRouter.get('/stats/public', async (req: Request, res: Response) => {
   const warriors = await db.prepare("SELECT count(*) as count FROM users WHERE role = 'user' AND is_deactivated = 0").get() as { count: number };
   const completed = await db.prepare("SELECT count(*) as count FROM tournaments WHERE status = 'Completed'").get() as { count: number };
@@ -310,7 +310,7 @@ apiRouter.get('/tournaments/:id', async (req: Request & { user?: AuthUser }, res
   // Check current user registration status if logged in
   let registration: any = null;
   if (req.user) {
-    registration = db.prepare(`
+    registration = await db.prepare(`
       SELECT r.*, p.status as payment_status, p.transaction_ref, p.rejection_reason
       FROM registrations r
       LEFT JOIN payments p ON p.registration_id = r.id
@@ -376,31 +376,40 @@ apiRouter.post('/tournaments/:id/register', requireAuth, async (req: Request & {
     }
   }
 
-  // Transaction-safe slot reservation
+  // Transaction-safe slot reservation (dedicated PostgreSQL PoolClient transaction)
   try {
-    await db.exec('BEGIN TRANSACTION');
+    const txResult = await db.transaction(async (tx) => {
+      const freshTournament = await tx
+        .prepare('SELECT available_slots, total_slots, entry_fee FROM tournaments WHERE id = ?')
+        .get(tournamentId) as any;
 
-    const freshTournament = await db.prepare('SELECT available_slots, total_slots, entry_fee FROM tournaments WHERE id = ?').get(tournamentId) as any;
-    if (freshTournament.available_slots <= 0) {
-      await db.exec('ROLLBACK');
-      return res.status(400).json({ error: 'Tournament is already full! No slots remaining.' });
-    }
+      if (!freshTournament || freshTournament.available_slots <= 0) {
+        throw Object.assign(new Error('Tournament is already full! No slots remaining.'), { statusCode: 400 });
+      }
 
-    // Decrement available slots
-    const newSlots = freshTournament.available_slots - 1;
-    const newStatus = newSlots === 0 ? 'Full' : tournament.status;
+      const newSlots = freshTournament.available_slots - 1;
+      const newStatus = newSlots === 0 ? 'Full' : tournament.status;
 
-    await db.prepare("UPDATE tournaments SET available_slots = ?, status = ?, updated_at = datetime('now') WHERE id = ?").run(newSlots, newStatus, tournamentId);
+      await tx
+        .prepare("UPDATE tournaments SET available_slots = ?, status = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(newSlots, newStatus, tournamentId);
 
-    const slotNumber = freshTournament.total_slots - newSlots;
-    const initialPaymentStatus = freshTournament.entry_fee === 0 ? 'approved' : 'pending';
+      const slotNumber = freshTournament.total_slots - newSlots;
+      const initialPaymentStatus = freshTournament.entry_fee === 0 ? 'approved' : 'pending';
 
-    const regResult = await db.prepare(`
-      INSERT INTO registrations (tournament_id, user_id, team_id, slot_number, payment_status)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(tournamentId, userId, team_id || null, slotNumber, initialPaymentStatus);
+      const regResult = await tx
+        .prepare(`
+          INSERT INTO registrations (tournament_id, user_id, team_id, slot_number, payment_status)
+          VALUES (?, ?, ?, ?, ?)
+        `)
+        .run(tournamentId, userId, team_id || null, slotNumber, initialPaymentStatus);
 
-    await db.exec('COMMIT');
+      return {
+        registrationId: regResult.lastInsertRowid,
+        slotNumber,
+        entryFee: freshTournament.entry_fee
+      };
+    });
 
     // Notify user
     await db.prepare(`
@@ -408,20 +417,22 @@ apiRouter.post('/tournaments/:id/register', requireAuth, async (req: Request & {
       VALUES (?, 'Registration Slot Reserved!', ?, 'tournament')
     `).run(
       userId,
-      freshTournament.entry_fee === 0
-        ? `You have successfully joined ${tournament.title}! Your slot #${slotNumber} is confirmed.`
-        : `Slot #${slotNumber} reserved for ${tournament.title}! Please submit your UPI payment to lock in your spot.`
+      txResult.entryFee === 0
+        ? `You have successfully joined ${tournament.title}! Your slot #${txResult.slotNumber} is confirmed.`
+        : `Slot #${txResult.slotNumber} reserved for ${tournament.title}! Please submit your UPI payment to lock in your spot.`
     );
 
     return res.json({
       success: true,
-      registrationId: regResult.lastInsertRowid,
-      slotNumber,
-      paymentRequired: freshTournament.entry_fee > 0,
-      entryFee: freshTournament.entry_fee
+      registrationId: txResult.registrationId,
+      slotNumber: txResult.slotNumber,
+      paymentRequired: txResult.entryFee > 0,
+      entryFee: txResult.entryFee
     });
   } catch (err: any) {
-    await db.exec('ROLLBACK');
+    if (err.statusCode === 400) {
+      return res.status(400).json({ error: err.message });
+    }
     return res.status(500).json({ error: 'Registration failed due to server error: ' + err.message });
   }
 });
@@ -832,7 +843,10 @@ apiRouter.get('/user/matches', requireAuth, async (req: Request & { user?: AuthU
   const username = req.user!.username;
   const ign = req.user!.free_fire_ign || '';
 
-  const matches = await db.prepare(`
+  const userPattern = `%${username.toLowerCase()}%`;
+  const ignPattern = ign.trim() ? `%${ign.trim().toLowerCase()}%` : '__NO_IGN_MATCH__';
+
+  const rawMatches = await db.prepare(`
     SELECT 
       t.id as tournament_id,
       t.title,
@@ -859,14 +873,20 @@ apiRouter.get('/user/matches', requireAuth, async (req: Request & { user?: AuthU
     LEFT JOIN registrations r ON r.tournament_id = t.id AND r.user_id = ?
     LEFT JOIN results res ON res.tournament_id = t.id AND (
       res.user_id = ? OR 
-      res.player_name LIKE '%' || ? || '%' OR 
-      (length(?) > 0 AND res.player_name LIKE '%' || ? || '%')
+      LOWER(res.player_name) LIKE ? OR 
+      LOWER(res.player_name) LIKE ?
     )
     WHERE (t.status = 'Completed' OR res.id IS NOT NULL)
       AND (r.id IS NOT NULL OR res.id IS NOT NULL)
-    GROUP BY t.id
-    ORDER BY t.match_at DESC
-  `).all(userId, userId, username, ign, ign) as any[];
+    ORDER BY t.match_at DESC, res.rank ASC
+  `).all(userId, userId, userPattern, ignPattern) as any[];
+
+  const seenTournaments = new Set<number>();
+  const matches = rawMatches.filter((m) => {
+    if (seenTournaments.has(m.tournament_id)) return false;
+    seenTournaments.add(m.tournament_id);
+    return true;
+  });
 
   let totalWins = 0;
   let top3 = 0;
@@ -957,7 +977,7 @@ apiRouter.post('/admin/payments/:id/verify', requireRole(['super_admin', 'paymen
   if (status === 'rejected') {
     await db.prepare(`
       UPDATE tournaments
-      SET available_slots = MIN(total_slots, available_slots + 1),
+      SET available_slots = CASE WHEN available_slots + 1 > total_slots THEN total_slots ELSE available_slots + 1 END,
           status = 'Registration Open',
           updated_at = datetime('now')
       WHERE id = ?
@@ -1007,7 +1027,7 @@ apiRouter.put('/admin/payments/:id/verify', requireRole(['super_admin', 'payment
   `).run(status, status === 'rejected' ? (rejection_reason || 'UTR could not be verified.') : '', req.user!.id, now, paymentId);
   await db.prepare(`UPDATE registrations SET payment_status = ?, updated_at = ? WHERE id = ?`).run(status, now, payment.registration_id);
   if (status === 'rejected') {
-    await db.prepare(`UPDATE tournaments SET available_slots = MIN(total_slots, available_slots + 1), status = 'Registration Open', updated_at = datetime('now') WHERE id = ?`).run(payment.tournament_id);
+    await db.prepare(`UPDATE tournaments SET available_slots = CASE WHEN available_slots + 1 > total_slots THEN total_slots ELSE available_slots + 1 END, status = 'Registration Open', updated_at = datetime('now') WHERE id = ?`).run(payment.tournament_id);
   }
   logAdminActivity(req.user?.id, req.user?.username || 'Admin', 'VERIFY_PAYMENT', `${status.toUpperCase()} payment #${paymentId}`);
   return res.json({ success: true, status });
@@ -1024,9 +1044,9 @@ apiRouter.post('/admin/payments/:id/refund', requireRole(['super_admin', 'paymen
   }
 
   await db.prepare(`
-    INSERT INTO refunds (payment_id, user_id, amount, reason, status, processed_by_admin_id)
-    VALUES (?, ?, ?, ?, 'processed', ?)
-  `).run(paymentId, payment.user_id, amount || payment.amount, reason || 'Tournament rescheduled or cancelled', req.user!.id);
+    INSERT INTO refunds (payment_id, user_id, tournament_id, amount, reason, status, processed_by_admin_id)
+    VALUES (?, ?, ?, ?, ?, 'processed', ?)
+  `).run(paymentId, payment.user_id, payment.tournament_id, amount || payment.amount, reason || 'Tournament rescheduled or cancelled', req.user!.id);
 
   await db.prepare(`UPDATE payments SET status = 'refunded' WHERE id = ?`).run(paymentId);
   await db.prepare(`UPDATE registrations SET payment_status = 'refunded' WHERE id = ?`).run(payment.registration_id);
@@ -1753,8 +1773,8 @@ apiRouter.post('/tickets/:id/reply', requireAuth, async (req: Request & { user?:
   if (isStaff && ticket.user_id !== req.user!.id) {
     await db.prepare(`
       INSERT INTO notifications (user_id, title, message, type)
-      VALUES (?, 'Support Replied: #' || ?, ?, 'support')
-    `).run(ticket.user_id, ticket.ticket_code, `A support agent replied to your ticket "${ticket.subject}".`);
+      VALUES (?, ?, ?, 'support')
+    `).run(ticket.user_id, `Support Replied: #${ticket.ticket_code}`, `A support agent replied to your ticket "${ticket.subject}".`);
   }
 
   return res.json({ success: true });
@@ -1868,7 +1888,7 @@ apiRouter.put('/admin/users/:id', requireRole(['super_admin']), async (req: Requ
     UPDATE users
     SET role = COALESCE(?, role), is_blocked = COALESCE(?, is_blocked), updated_at = datetime('now')
     WHERE id = ?
-  `).run(role, is_blocked !== undefined ? (is_blocked ? 1 : 0) : null, id);
+  `).run(role ?? null, is_blocked !== undefined ? (is_blocked ? 1 : 0) : null, id);
 
   syncDataBackup();
 

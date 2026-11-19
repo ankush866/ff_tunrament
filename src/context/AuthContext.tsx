@@ -1,8 +1,30 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { apiRequest, getToken, setToken } from '../lib/api.js';
+import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  query,
+  where,
+  onSnapshot,
+  serverTimestamp
+} from 'firebase/firestore';
+import {
+  auth,
+  db,
+  googleProvider,
+  SUPER_ADMIN_EMAIL,
+  OperationType,
+  handleFirestoreError,
+  compressImageDataUrl
+} from '../lib/firebase.js';
+import { apiRequest } from '../lib/api.js';
+import { ensureFirestoreSeeded } from '../lib/firestoreSeed.js';
 
 export interface User {
-  id: number;
+  id: string;
   username: string;
   email: string;
   full_name: string;
@@ -16,7 +38,7 @@ export interface User {
 }
 
 export interface NotificationItem {
-  id: number;
+  id: string;
   title: string;
   message: string;
   type: string;
@@ -25,17 +47,26 @@ export interface NotificationItem {
   created_at: string;
 }
 
+export interface ExtraProfileInput {
+  username?: string;
+  full_name?: string;
+  free_fire_uid?: string;
+  free_fire_ign?: string;
+  phone?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (usernameOrEmail: string, password: string) => Promise<void>;
-  register: (data: any) => Promise<void>;
-  logout: () => void;
+  isAuthReady: boolean;
+  authError: string | null;
+  signInWithGoogle: (extra?: ExtraProfileInput) => Promise<User>;
+  logout: () => Promise<void>;
   updateProfile: (data: any) => Promise<void>;
   notifications: NotificationItem[];
   unreadCount: number;
-  markNotificationRead: (id: number) => Promise<void>;
+  markNotificationRead: (id: string | number) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
@@ -43,108 +74,327 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function resolveOrCreateUserProfile(
+  fbUser: FirebaseUser,
+  extra?: ExtraProfileInput
+): Promise<User> {
+  const uid = fbUser.uid;
+  const userRef = doc(db, 'users', uid);
+  const privRef = doc(db, 'users', uid, 'private', 'info');
+
+  let userSnap;
+  try {
+    userSnap = await getDoc(userRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, `users/${uid}`);
+  }
+
+  const baseEmail = fbUser.email || '';
+  const defaultUsername = (
+    extra?.username ||
+    baseEmail.split('@')[0] ||
+    fbUser.displayName ||
+    `player_${uid.slice(0, 6)}`
+  )
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .slice(0, 48);
+
+  if (!userSnap.exists()) {
+    const newPublicProfile = {
+      uid,
+      username: defaultUsername.length >= 2 ? defaultUsername : `p_${uid.slice(0, 6)}`,
+      full_name: (extra?.full_name || fbUser.displayName || defaultUsername).slice(0, 100),
+      free_fire_uid: (extra?.free_fire_uid || '').slice(0, 32),
+      free_fire_ign: (extra?.free_fire_ign || '').slice(0, 64),
+      avatar_url: (fbUser.photoURL || '').slice(0, 350000),
+      role: 'user',
+      is_blocked: false,
+      is_deactivated: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    try {
+      await setDoc(userRef, newPublicProfile);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `users/${uid}`);
+    }
+
+    try {
+      await setDoc(privRef, {
+        uid,
+        email: baseEmail.slice(0, 160),
+        phone: (extra?.phone || '').slice(0, 32),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `users/${uid}/private/info`);
+    }
+
+    try {
+      const notifId = `welcome_${uid.slice(0, 20)}`;
+      await setDoc(doc(db, 'notifications', notifId), {
+        id: notifId,
+        user_id: uid,
+        title: 'Welcome to Flaxy Esports!',
+        message: 'Your Firebase-backed warrior account is ready. Complete your Free Fire IGN/UID in Profile and join live matches.',
+        type: 'system',
+        is_read: 0,
+        link_url: '/tournaments',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } catch {
+      // Non-blocking welcome notification
+    }
+
+    userSnap = await getDoc(userRef);
+  } else if (extra && (extra.free_fire_uid || extra.free_fire_ign || extra.full_name || extra.phone)) {
+    const cur = userSnap.data();
+    const pubUpdates: Record<string, any> = { updatedAt: serverTimestamp() };
+    if (extra.full_name && !cur.full_name) pubUpdates.full_name = extra.full_name.slice(0, 100);
+    if (extra.free_fire_uid && !cur.free_fire_uid) pubUpdates.free_fire_uid = extra.free_fire_uid.slice(0, 32);
+    if (extra.free_fire_ign && !cur.free_fire_ign) pubUpdates.free_fire_ign = extra.free_fire_ign.slice(0, 64);
+
+    if (Object.keys(pubUpdates).length > 1) {
+      try {
+        await updateDoc(userRef, pubUpdates);
+        userSnap = await getDoc(userRef);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+      }
+    }
+
+    if (extra.phone) {
+      try {
+        const privSnap = await getDoc(privRef);
+        if (privSnap.exists() && !privSnap.data().phone) {
+          await updateDoc(privRef, { phone: extra.phone.slice(0, 32), updatedAt: serverTimestamp() });
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/private/info`);
+      }
+    }
+  }
+
+  const pubData = userSnap.data() || {};
+  if (pubData.is_blocked) {
+    await signOut(auth);
+    throw new Error('Account Suspended: Your account has been blocked by Admin.');
+  }
+
+  let phone = '';
+  let email = baseEmail;
+  try {
+    const privSnap = await getDoc(privRef);
+    if (privSnap.exists()) {
+      phone = privSnap.data().phone || '';
+      email = privSnap.data().email || baseEmail;
+    } else {
+      await setDoc(privRef, {
+        uid,
+        email: baseEmail.slice(0, 160),
+        phone: '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, `users/${uid}/private/info`);
+  }
+
+  let effectiveRole: User['role'] = 'user';
+  if (baseEmail.toLowerCase() === SUPER_ADMIN_EMAIL && fbUser.emailVerified) {
+    effectiveRole = 'super_admin';
+    void ensureFirestoreSeeded();
+  } else {
+    try {
+      const adminSnap = await getDoc(doc(db, 'admins', uid));
+      if (adminSnap.exists()) {
+        effectiveRole = (adminSnap.data().role as User['role']) || 'user';
+        if (effectiveRole === 'super_admin') void ensureFirestoreSeeded();
+      }
+    } catch {
+      effectiveRole = (pubData.role as User['role']) || 'user';
+    }
+  }
+
+  const createdIso = pubData.createdAt?.toDate ? pubData.createdAt.toDate().toISOString() : new Date().toISOString();
+
+  return {
+    id: uid,
+    username: pubData.username || defaultUsername,
+    email,
+    full_name: pubData.full_name || '',
+    free_fire_uid: pubData.free_fire_uid || '',
+    free_fire_ign: pubData.free_fire_ign || '',
+    phone,
+    avatar_url: pubData.avatar_url || fbUser.photoURL || '',
+    role: effectiveRole,
+    is_email_verified: fbUser.emailVerified ? 1 : 0,
+    created_at: createdIso
+  };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setTokenState] = useState<string | null>(getToken());
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
+  const refreshUser = useCallback(async () => {
+    const cu = auth.currentUser;
+    if (!cu) {
+      setUser(null);
+      return;
+    }
+    try {
+      const profile = await resolveOrCreateUserProfile(cu);
+      setUser(profile);
+    } catch (err: any) {
+      setAuthError(err?.message || 'Unable to load profile.');
+      setUser(null);
+    }
+  }, []);
+
   const refreshNotifications = useCallback(async () => {
-    if (!getToken()) return;
+    if (!auth.currentUser) return;
     try {
       const res = await apiRequest<{ notifications: NotificationItem[]; unreadCount: number }>('/notifications');
       setNotifications(res.notifications || []);
       setUnreadCount(res.unreadCount || 0);
     } catch {
-      // Ignored
+      // Listener keeps synced
     }
   }, []);
 
-  const refreshUser = useCallback(async () => {
-    const existingToken = getToken();
-    if (!existingToken) {
-      setUser(null);
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const res = await apiRequest<{ user: User }>('/auth/me');
-      setUser(res.user);
-      await refreshNotifications();
-    } catch {
-      // If token invalid, clear
-      setToken(null);
-      setTokenState(null);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshNotifications]);
-
   useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      setAuthError(null);
+      if (!fbUser) {
+        setUser(null);
+        setNotifications([]);
+        setUnreadCount(0);
+        setIsAuthReady(true);
+        setIsLoading(false);
+        return;
+      }
 
-  const login = async (usernameOrEmail: string, password: string) => {
-    const res = await apiRequest<{ token: string; user: User }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ usernameOrEmail, password })
+      try {
+        const profile = await resolveOrCreateUserProfile(fbUser);
+        setUser(profile);
+      } catch (err: any) {
+        setAuthError(err?.message || 'Sign-in failed.');
+        setUser(null);
+      } finally {
+        setIsAuthReady(true);
+        setIsLoading(false);
+      }
     });
-    setToken(res.token);
-    setTokenState(res.token);
-    setUser(res.user);
-    await refreshNotifications();
+
+    return () => unsubscribe();
+  }, []);
+
+  // Attach real-time Firestore notification listener strictly AFTER auth is ready & user signed in
+  useEffect(() => {
+    if (!isAuthReady || !user) return;
+    const notifQuery = query(collection(db, 'notifications'), where('user_id', '==', user.id));
+    const unsub = onSnapshot(
+      notifQuery,
+      (snap) => {
+        const list: NotificationItem[] = snap.docs
+          .map((d) => {
+            const raw = d.data();
+            return {
+              id: raw.id || d.id,
+              title: raw.title || '',
+              message: raw.message || '',
+              type: raw.type || 'system',
+              is_read: Number(raw.is_read || 0),
+              link_url: raw.link_url || '',
+              created_at: raw.createdAt?.toDate ? raw.createdAt.toDate().toISOString() : new Date().toISOString()
+            };
+          })
+          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setNotifications(list);
+        setUnreadCount(list.filter((n) => n.is_read === 0).length);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'notifications');
+      }
+    );
+    return () => unsub();
+  }, [isAuthReady, user?.id]);
+
+  const signInWithGoogle = async (extra?: ExtraProfileInput): Promise<User> => {
+    setAuthError(null);
+    const cred = await signInWithPopup(auth, googleProvider);
+    const profile = await resolveOrCreateUserProfile(cred.user, extra);
+    setUser(profile);
+    return profile;
   };
 
-  const register = async (formData: any) => {
-    const res = await apiRequest<{ token: string; user: User }>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(formData)
-    });
-    setToken(res.token);
-    setTokenState(res.token);
-    setUser(res.user);
-    await refreshNotifications();
-  };
-
-  const logout = () => {
-    setToken(null);
-    setTokenState(null);
+  const logout = async () => {
+    await signOut(auth);
     setUser(null);
     setNotifications([]);
     setUnreadCount(0);
   };
 
   const updateProfile = async (formData: any) => {
-    const res = await apiRequest<{ user: User }>('/auth/profile', {
-      method: 'PUT',
-      body: JSON.stringify(formData)
-    });
-    setUser(res.user);
+    const cu = auth.currentUser;
+    if (!cu) throw new Error('Please sign in first.');
+    const uid = cu.uid;
+    const avatarUrl = formData.avatar_url
+      ? await compressImageDataUrl(String(formData.avatar_url), 400, 0.72)
+      : '';
+
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        full_name: String(formData.full_name || '').slice(0, 100),
+        free_fire_uid: String(formData.free_fire_uid || '').slice(0, 32),
+        free_fire_ign: String(formData.free_fire_ign || '').slice(0, 64),
+        avatar_url: avatarUrl,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+    }
+
+    if (formData.phone !== undefined) {
+      try {
+        await updateDoc(doc(db, 'users', uid, 'private', 'info'), {
+          phone: String(formData.phone || '').slice(0, 32),
+          updatedAt: serverTimestamp()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/private/info`);
+      }
+    }
+
+    await refreshUser();
   };
 
-  const markNotificationRead = async (id: number) => {
+  const markNotificationRead = async (id: string | number) => {
     await apiRequest(`/notifications/${id}/read`, { method: 'PUT' });
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
   };
 
   const markAllNotificationsRead = async () => {
     await apiRequest('/notifications/mark-all-read', { method: 'POST' });
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
-    setUnreadCount(0);
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
+        token: user ? user.id : null,
         isLoading,
-        login,
-        register,
+        isAuthReady,
+        authError,
+        signInWithGoogle,
         logout,
         updateProfile,
         notifications,

@@ -1,0 +1,556 @@
+{
+  "entities": {
+    "UserPublicProfile": {
+      "title": "UserPublicProfile",
+      "description": "Public gaming identity for a player without PII (email and phone are isolated in private subcollection).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "full_name": { "type": "string", "maxLength": 100 },
+        "free_fire_uid": { "type": "string", "maxLength": 32 },
+        "free_fire_ign": { "type": "string", "maxLength": 64 },
+        "avatar_url": { "type": "string", "maxLength": 350000 },
+        "role": {
+          "type": "string",
+          "enum": ["user", "super_admin", "tournament_manager", "payment_manager", "content_manager", "support_manager"]
+        },
+        "is_blocked": { "type": "boolean" },
+        "is_deactivated": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username", "role", "is_blocked", "is_deactivated", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Private PII (email, phone) strictly accessible only by the account owner and super_admin.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "phone", "createdAt", "updatedAt"]
+    },
+    "AdminRoleRecord": {
+      "title": "AdminRoleRecord",
+      "description": "Trusted RBAC document controlling staff roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 160 },
+        "role": {
+          "type": "string",
+          "enum": ["super_admin", "tournament_manager", "payment_manager", "content_manager", "support_manager"]
+        },
+        "assignedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role", "assignedBy", "createdAt", "updatedAt"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Free Fire esports tournament details, prize pool, entry fee, and live slot capacity.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "slug": { "type": "string", "maxLength": 180 },
+        "banner_image": { "type": "string", "maxLength": 350000 },
+        "game_mode": { "type": "string", "enum": ["Solo", "Duo", "Squad", "Clash Squad"] },
+        "map_name": { "type": "string", "maxLength": 64 },
+        "entry_fee": { "type": "number" },
+        "prize_pool": { "type": "number" },
+        "total_slots": { "type": "number" },
+        "available_slots": { "type": "number" },
+        "reg_open_at": { "type": "string", "maxLength": 64 },
+        "reg_close_at": { "type": "string", "maxLength": 64 },
+        "match_at": { "type": "string", "maxLength": 64 },
+        "rules_text": { "type": "string", "maxLength": 10000 },
+        "status": {
+          "type": "string",
+          "enum": ["Upcoming", "Registration Open", "Live", "Completed", "Cancelled"]
+        },
+        "is_published": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "game_mode", "map_name", "entry_fee", "prize_pool", "total_slots", "available_slots", "match_at", "status", "is_published", "createdAt", "updatedAt"]
+    },
+    "TournamentRoomSchedule": {
+      "title": "TournamentRoomSchedule",
+      "description": "Public room timing schedule without leaking secret Room ID or Password.",
+      "type": "object",
+      "properties": {
+        "tournament_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "opening_time": { "type": "string", "maxLength": 64 },
+        "match_start_time": { "type": "string", "maxLength": 64 },
+        "closing_time": { "type": "string", "maxLength": 64 },
+        "opening_at": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["scheduled", "open", "live", "closed", "cancelled"] },
+        "is_published": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tournament_id", "opening_time", "match_start_time", "closing_time", "opening_at", "status", "is_published", "createdAt", "updatedAt"]
+    },
+    "TournamentRoomSecrets": {
+      "title": "TournamentRoomSecrets",
+      "description": "Confidential Free Fire Room ID and Password protected behind approved payment + schedule gate.",
+      "type": "object",
+      "properties": {
+        "tournament_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "room_id_code": { "type": "string", "maxLength": 64 },
+        "room_password": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tournament_id", "room_id_code", "room_password", "createdAt", "updatedAt"]
+    },
+    "Registration": {
+      "title": "Registration",
+      "description": "Player tournament slot reservation tied deterministically to tournamentId_userId.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tournament_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "maxLength": 64 },
+        "free_fire_uid": { "type": "string", "maxLength": 32 },
+        "free_fire_ign": { "type": "string", "maxLength": 64 },
+        "team_id": { "type": "string", "maxLength": 128 },
+        "slot_number": { "type": "number" },
+        "payment_status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "rejection_reason": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tournament_id", "user_id", "slot_number", "payment_status", "createdAt", "updatedAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Manual UPI payment receipt, 12-digit UTR, WhatsApp contact, and admin verification state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "registration_id": { "type": "string", "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "maxLength": 64 },
+        "free_fire_uid": { "type": "string", "maxLength": 32 },
+        "free_fire_ign": { "type": "string", "maxLength": 64 },
+        "tournament_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tournament_title": { "type": "string", "maxLength": 160 },
+        "amount": { "type": "number" },
+        "upi_id": { "type": "string", "maxLength": 128 },
+        "transaction_ref": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "screenshot_url": { "type": "string", "maxLength": 350000 },
+        "whatsapp_number": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "refunded"] },
+        "rejection_reason": { "type": "string", "maxLength": 500 },
+        "verified_by_admin_id": { "type": "string", "maxLength": 128 },
+        "verified_by_admin_name": { "type": "string", "maxLength": 100 },
+        "verified_at": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "registration_id", "user_id", "tournament_id", "amount", "transaction_ref", "status", "createdAt", "updatedAt"]
+    },
+    "TournamentResult": {
+      "title": "TournamentResult",
+      "description": "Published tournament leaderboard entry with rank, kills, points, and cash prize.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tournament_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "rank": { "type": "number" },
+        "user_id": { "type": "string", "maxLength": 128 },
+        "player_name": { "type": "string", "maxLength": 100 },
+        "kills": { "type": "number" },
+        "placement_points": { "type": "number" },
+        "kill_points": { "type": "number" },
+        "total_points": { "type": "number" },
+        "prize_amount": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tournament_id", "rank", "player_name", "kills", "placement_points", "total_points", "prize_amount", "createdAt", "updatedAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Overall platform player leaderboard ranking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "maxLength": 128 },
+        "player_name": { "type": "string", "maxLength": 100 },
+        "free_fire_ign": { "type": "string", "maxLength": 64 },
+        "avatar_url": { "type": "string", "maxLength": 350000 },
+        "total_matches": { "type": "number" },
+        "wins": { "type": "number" },
+        "total_kills": { "type": "number" },
+        "total_points": { "type": "number" },
+        "total_earnings": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "player_name", "total_points", "total_earnings", "createdAt", "updatedAt"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Duo team record with bounded member UIDs list (max 2) and captain.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "tag": { "type": "string", "maxLength": 12 },
+        "captain_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "member_uids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "captain_id", "member_uids", "createdAt", "updatedAt"]
+    },
+    "TeamInvite": {
+      "title": "TeamInvite",
+      "description": "Duo team invitation from captain to partner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "team_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "team_name": { "type": "string", "maxLength": 64 },
+        "captain_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "captain_name": { "type": "string", "maxLength": 64 },
+        "invited_user_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "invited_username": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "team_id", "captain_id", "invited_user_id", "status", "createdAt", "updatedAt"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Player support ticket.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ticket_code": { "type": "string", "maxLength": 32 },
+        "user_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "maxLength": 64 },
+        "category": { "type": "string", "maxLength": 64 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 4000 },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved", "closed"] },
+        "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ticket_code", "user_id", "category", "subject", "message", "status", "priority", "createdAt", "updatedAt"]
+    },
+    "SupportReply": {
+      "title": "SupportReply",
+      "description": "Message thread reply under a support ticket.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ticket_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ticket_owner_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "maxLength": 64 },
+        "is_admin": { "type": "number" },
+        "message": { "type": "string", "maxLength": 4000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ticket_id", "ticket_owner_id", "user_id", "is_admin", "message", "createdAt", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Per-user alerts for payments, matches, and announcements.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 160 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "type": { "type": "string", "maxLength": 32 },
+        "is_read": { "type": "number" },
+        "link_url": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "user_id", "title", "message", "type", "is_read", "createdAt", "updatedAt"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Global platform configuration (UPI ID, QR code, WhatsApp, social links, site branding).",
+      "type": "object",
+      "properties": {
+        "site_name": { "type": "string", "maxLength": 150 },
+        "upi_id": { "type": "string", "maxLength": 128 },
+        "whatsapp_number": { "type": "string", "maxLength": 32 },
+        "whatsapp_url": { "type": "string", "maxLength": 300 },
+        "support_email": { "type": "string", "maxLength": 150 },
+        "contact_phone": { "type": "string", "maxLength": 32 },
+        "payment_qr_url": { "type": "string", "maxLength": 350000 },
+        "site_tagline": { "type": "string", "maxLength": 300 },
+        "site_description": { "type": "string", "maxLength": 1000 },
+        "site_logo": { "type": "string", "maxLength": 350000 },
+        "default_timezone": { "type": "string", "maxLength": 64 },
+        "maintenance_mode": { "type": "string", "maxLength": 16 },
+        "registration_enabled": { "type": "string", "maxLength": 16 },
+        "primary_theme_color": { "type": "string", "maxLength": 32 },
+        "secondary_theme_color": { "type": "string", "maxLength": 32 },
+        "background_theme_color": { "type": "string", "maxLength": 32 },
+        "scoring_rules": { "type": "string", "maxLength": 2000 },
+        "footer_text": { "type": "string", "maxLength": 500 },
+        "social_instagram": { "type": "string", "maxLength": 300 },
+        "social_youtube": { "type": "string", "maxLength": 300 },
+        "social_discord": { "type": "string", "maxLength": 300 },
+        "social_telegram": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["site_name", "upi_id", "createdAt", "updatedAt"]
+    },
+    "WebsitePage": {
+      "title": "WebsitePage",
+      "description": "CMS website policy and info page.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 200 },
+        "slug": { "type": "string", "maxLength": 128 },
+        "content": { "type": "string", "maxLength": 100000 },
+        "meta_title": { "type": "string", "maxLength": 200 },
+        "meta_description": { "type": "string", "maxLength": 500 },
+        "og_title": { "type": "string", "maxLength": 200 },
+        "og_description": { "type": "string", "maxLength": 500 },
+        "og_image": { "type": "string", "maxLength": 350000 },
+        "is_published": { "type": "number" },
+        "is_system": { "type": "number" },
+        "version": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "slug", "content", "is_published", "version", "createdAt", "updatedAt"]
+    },
+    "WebsitePageVersion": {
+      "title": "WebsitePageVersion",
+      "description": "Historical revision of a CMS page.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "page_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "version_num": { "type": "number" },
+        "title": { "type": "string", "maxLength": 200 },
+        "slug": { "type": "string", "maxLength": 128 },
+        "content": { "type": "string", "maxLength": 100000 },
+        "meta_title": { "type": "string", "maxLength": 200 },
+        "meta_description": { "type": "string", "maxLength": 500 },
+        "edited_by_admin_name": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "page_id", "version_num", "title", "slug", "content", "createdAt", "updatedAt"]
+    },
+    "HomepageSection": {
+      "title": "HomepageSection",
+      "description": "Configurable homepage section block.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "section_key": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 500 },
+        "content_json": { "type": "string", "maxLength": 10000 },
+        "sort_order": { "type": "number" },
+        "is_enabled": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "section_key", "title", "sort_order", "is_enabled", "createdAt", "updatedAt"]
+    },
+    "NavigationItem": {
+      "title": "NavigationItem",
+      "description": "Header and footer menu navigation link.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "label": { "type": "string", "maxLength": 80 },
+        "url": { "type": "string", "maxLength": 300 },
+        "target": { "type": "string", "maxLength": 16 },
+        "sort_order": { "type": "number" },
+        "is_visible": { "type": "number" },
+        "is_footer": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "label", "url", "sort_order", "is_visible", "is_footer", "createdAt", "updatedAt"]
+    },
+    "FaqItem": {
+      "title": "FaqItem",
+      "description": "Frequently asked question entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "category": { "type": "string", "maxLength": 64 },
+        "question": { "type": "string", "maxLength": 500 },
+        "answer": { "type": "string", "maxLength": 4000 },
+        "sort_order": { "type": "number" },
+        "is_published": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "category", "question", "answer", "sort_order", "is_published", "createdAt", "updatedAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Top banner live announcement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 200 },
+        "content": { "type": "string", "maxLength": 1000 },
+        "banner_type": { "type": "string", "enum": ["info", "urgent", "success", "warning"] },
+        "is_banner_visible": { "type": "number" },
+        "is_published": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "content", "banner_type", "is_banner_visible", "is_published", "createdAt", "updatedAt"]
+    },
+    "MediaItem": {
+      "title": "MediaItem",
+      "description": "Media library asset URL.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "file_name": { "type": "string", "maxLength": 160 },
+        "url": { "type": "string", "maxLength": 350000 },
+        "uploaded_by": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "file_name", "url", "uploaded_by", "createdAt", "updatedAt"]
+    },
+    "AdminActivityLog": {
+      "title": "AdminActivityLog",
+      "description": "Immutable admin audit trail log.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "admin_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "admin_name": { "type": "string", "maxLength": 100 },
+        "action": { "type": "string", "maxLength": 100 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "admin_id", "admin_name", "action", "details", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublicProfile" },
+      "description": "Public gaming profile documents keyed by Firebase Auth UID (no email/phone PII)."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII subcollection (email, phone) keyed by docId 'info'."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRoleRecord" },
+      "description": "Authoritative RBAC role assignments for staff members."
+    },
+    "/tournaments/{tournamentId}": {
+      "schema": { "$ref": "#/entities/Tournament" },
+      "description": "Tournament listings and live slot counters."
+    },
+    "/rooms/{tournamentId}": {
+      "schema": { "$ref": "#/entities/TournamentRoomSchedule" },
+      "description": "Public room opening schedule timestamps."
+    },
+    "/room_secrets/{tournamentId}": {
+      "schema": { "$ref": "#/entities/TournamentRoomSecrets" },
+      "description": "Confidential Free Fire Room ID & Password."
+    },
+    "/registrations/{registrationId}": {
+      "schema": { "$ref": "#/entities/Registration" },
+      "description": "Deterministic player tournament registrations (${tournamentId}_${userId})."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Manual UPI UTR and receipt verification records."
+    },
+    "/results/{resultId}": {
+      "schema": { "$ref": "#/entities/TournamentResult" },
+      "description": "Match result standings and prizes."
+    },
+    "/leaderboard/{entryId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Global platform leaderboard rankings."
+    },
+    "/teams/{teamId}": {
+      "schema": { "$ref": "#/entities/Team" },
+      "description": "Player Duo teams (max 2 members)."
+    },
+    "/team_invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/TeamInvite" },
+      "description": "Pending Duo team invitations."
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Player support tickets."
+    },
+    "/support_tickets/{ticketId}/replies/{replyId}": {
+      "schema": { "$ref": "#/entities/SupportReply" },
+      "description": "Replies under a support ticket."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "In-app user notifications."
+    },
+    "/settings/{settingDocId}": {
+      "schema": { "$ref": "#/entities/SiteSettings" },
+      "description": "Global site settings document ('public')."
+    },
+    "/website_pages/{pageId}": {
+      "schema": { "$ref": "#/entities/WebsitePage" },
+      "description": "CMS pages."
+    },
+    "/website_pages/{pageId}/versions/{versionId}": {
+      "schema": { "$ref": "#/entities/WebsitePageVersion" },
+      "description": "Revision history subcollection for CMS pages."
+    },
+    "/homepage_sections/{sectionId}": {
+      "schema": { "$ref": "#/entities/HomepageSection" },
+      "description": "Homepage builder sections."
+    },
+    "/navigation_items/{itemId}": {
+      "schema": { "$ref": "#/entities/NavigationItem" },
+      "description": "Header and footer navigation links."
+    },
+    "/faqs/{faqId}": {
+      "schema": { "$ref": "#/entities/FaqItem" },
+      "description": "Frequently asked questions."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Top announcement banners."
+    },
+    "/media_library/{mediaId}": {
+      "schema": { "$ref": "#/entities/MediaItem" },
+      "description": "CMS uploaded image links."
+    },
+    "/admin_activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminActivityLog" },
+      "description": "Audit log of administrative actions."
+    }
+  }
+}

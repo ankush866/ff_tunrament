@@ -20,7 +20,7 @@ import { apiRequest, formatINR, formatISTDateTime, formatISTTime, getTimeRemaini
 import { DEFAULT_MATCH_BANNER, getSafeImageUrl } from '../lib/assets.js';
 
 interface TournamentDetailViewProps {
-  tournamentId: number;
+  tournamentId: string | number;
   onNavigate: (view: string, params?: any) => void;
   onOpenAuth: (mode?: 'login' | 'register') => void;
 }
@@ -39,12 +39,12 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
   const [activeTab, setActiveTab] = useState<'room' | 'rules' | 'roster' | 'results'>('room');
 
   const [userTeams, setUserTeams] = useState<any[]>([]);
-  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | number | null>(null);
 
   const [showJoinModal, setShowJoinModal] = useState<boolean>(false);
   const [joinStep, setJoinStep] = useState<'confirm' | 'payment' | 'done'>('confirm');
   const [registeredSlot, setRegisteredSlot] = useState<number | null>(null);
-  const [registrationId, setRegistrationId] = useState<number | null>(null);
+  const [registrationId, setRegistrationId] = useState<string | number | null>(null);
   const [utrRef, setUtrRef] = useState<string>('');
   const [paymentWhatsapp, setPaymentWhatsapp] = useState<string>(user?.phone || '');
   const [screenshotUrl, setScreenshotUrl] = useState<string>('');
@@ -153,7 +153,7 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
     try {
       const res = await apiRequest<{
         success: boolean;
-        registrationId: number;
+        registrationId: string | number;
         slotNumber: number;
         paymentRequired: boolean;
         entryFee: number;
@@ -611,7 +611,7 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
                       {userTeams.length > 0 ? (
                         <select
                           value={selectedTeamId || ''}
-                          onChange={e => setSelectedTeamId(parseInt(e.target.value, 10))}
+                          onChange={e => setSelectedTeamId(e.target.value || null)}
                           className={inputClass}
                         >
                           {userTeams.map(t => (

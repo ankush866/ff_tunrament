@@ -106,6 +106,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                   FAQ & Guide
                 </button>
               </li>
+              <li>
+                <button type="button" onClick={() => onNavigate('admin')} className="text-amber-600 dark:text-amber-400 font-semibold hover:underline transition-colors flex items-center gap-1">
+                  <Shield className="w-3 h-3" />
+                  <span>Admin Login</span>
+                </button>
+              </li>
             </ul>
           </div>
 

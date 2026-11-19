@@ -1,0 +1,1021 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ---------------------------------------------------------
+    // Global Default-Deny Safety Net
+    // ---------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Global Security & Identity Primitives
+    // ---------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidLongId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 260 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'instagramgg2240106@gmail.com';
+    }
+
+    function isAdminDocPresent() {
+      return isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function adminRole() {
+      return isBootstrappedAdmin()
+        ? 'super_admin'
+        : (isAdminDocPresent()
+          ? get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role
+          : 'user');
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedAdmin() || (isAdminDocPresent() && adminRole() == 'super_admin');
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isAdminDocPresent() && adminRole() in [
+        'super_admin',
+        'tournament_manager',
+        'payment_manager',
+        'content_manager',
+        'support_manager'
+      ]);
+    }
+
+    function hasStaffRole(allowedRoles) {
+      return isSuperAdmin() || (isAdminDocPresent() && adminRole() in allowedRoles);
+    }
+
+    function isBlockedUser() {
+      return isVerifiedUser()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_blocked == true;
+    }
+
+    function isOptString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isValidRole(role) {
+      return role in ['user', 'super_admin', 'tournament_manager', 'payment_manager', 'content_manager', 'support_manager'];
+    }
+
+    // ---------------------------------------------------------
+    // Standalone Validation Blueprints (isValid[Entity])
+    // ---------------------------------------------------------
+    function isValidUserPublicProfile(data) {
+      return data.keys().hasAll(['uid', 'username', 'role', 'is_blocked', 'is_deactivated', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'username', 'full_name', 'free_fire_uid', 'free_fire_ign', 'avatar_url', 'role', 'is_blocked', 'is_deactivated', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.username is string && data.username.size() >= 2 && data.username.size() <= 50
+        && isOptString(data, 'full_name', 100)
+        && isOptString(data, 'free_fire_uid', 32)
+        && isOptString(data, 'free_fire_ign', 64)
+        && isOptString(data, 'avatar_url', 350000)
+        && isValidRole(data.role)
+        && data.is_blocked is bool
+        && data.is_deactivated is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data) {
+      return data.keys().hasAll(['uid', 'email', 'phone', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'phone', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() <= 160
+        && data.phone is string && data.phone.size() <= 32
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRoleRecord(data) {
+      return data.keys().hasAll(['uid', 'role', 'assignedBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'role', 'assignedBy', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && isOptString(data, 'email', 160)
+        && data.role in ['super_admin', 'tournament_manager', 'payment_manager', 'content_manager', 'support_manager']
+        && isValidId(data.assignedBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTournament(data) {
+      return data.keys().hasAll(['id', 'title', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'match_at', 'status', 'is_published', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'slug', 'banner_image', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'reg_open_at', 'reg_close_at', 'match_at', 'rules_text', 'status', 'is_published', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 150
+        && isOptString(data, 'slug', 180)
+        && isOptString(data, 'banner_image', 350000)
+        && data.game_mode in ['Solo', 'Duo', 'Squad', 'Clash Squad']
+        && data.map_name is string && data.map_name.size() >= 1 && data.map_name.size() <= 64
+        && data.entry_fee is number && data.entry_fee >= 0 && data.entry_fee <= 100000
+        && data.prize_pool is number && data.prize_pool >= 0 && data.prize_pool <= 10000000
+        && data.total_slots is number && data.total_slots >= 2 && data.total_slots <= 200
+        && data.available_slots is number && data.available_slots >= 0 && data.available_slots <= data.total_slots
+        && isOptString(data, 'reg_open_at', 64)
+        && isOptString(data, 'reg_close_at', 64)
+        && data.match_at is string && data.match_at.size() <= 64
+        && isOptString(data, 'rules_text', 10000)
+        && data.status in ['Upcoming', 'Registration Open', 'Live', 'Completed', 'Cancelled']
+        && data.is_published in [0, 1]
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRoomSchedule(data) {
+      return data.keys().hasAll(['tournament_id', 'opening_time', 'match_start_time', 'closing_time', 'opening_at', 'status', 'is_published', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['tournament_id', 'opening_time', 'match_start_time', 'closing_time', 'opening_at', 'status', 'is_published', 'createdAt', 'updatedAt'])
+        && isValidId(data.tournament_id)
+        && data.opening_time is string && data.opening_time.size() <= 64
+        && data.match_start_time is string && data.match_start_time.size() <= 64
+        && data.closing_time is string && data.closing_time.size() <= 64
+        && data.opening_at is timestamp
+        && data.status in ['scheduled', 'open', 'live', 'closed', 'cancelled']
+        && data.is_published in [0, 1]
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRoomSecrets(data) {
+      return data.keys().hasAll(['tournament_id', 'room_id_code', 'room_password', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['tournament_id', 'room_id_code', 'room_password', 'createdAt', 'updatedAt'])
+        && isValidId(data.tournament_id)
+        && data.room_id_code is string && data.room_id_code.size() <= 64
+        && data.room_password is string && data.room_password.size() <= 64
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRegistration(data) {
+      return data.keys().hasAll(['id', 'tournament_id', 'user_id', 'slot_number', 'payment_status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'tournament_id', 'user_id', 'username', 'free_fire_uid', 'free_fire_ign', 'team_id', 'slot_number', 'payment_status', 'rejection_reason', 'createdAt', 'updatedAt'])
+        && isValidLongId(data.id)
+        && isValidId(data.tournament_id)
+        && isValidId(data.user_id)
+        && isOptString(data, 'username', 64)
+        && isOptString(data, 'free_fire_uid', 32)
+        && isOptString(data, 'free_fire_ign', 64)
+        && isOptString(data, 'team_id', 128)
+        && data.slot_number is number && data.slot_number >= 1 && data.slot_number <= 200
+        && data.payment_status in ['pending', 'approved', 'rejected']
+        && isOptString(data, 'rejection_reason', 500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['id', 'registration_id', 'user_id', 'tournament_id', 'amount', 'transaction_ref', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'registration_id', 'user_id', 'username', 'free_fire_uid', 'free_fire_ign', 'tournament_id', 'tournament_title', 'amount', 'upi_id', 'transaction_ref', 'screenshot_url', 'whatsapp_number', 'status', 'rejection_reason', 'verified_by_admin_id', 'verified_by_admin_name', 'verified_at', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidLongId(data.registration_id)
+        && isValidId(data.user_id)
+        && isOptString(data, 'username', 64)
+        && isOptString(data, 'free_fire_uid', 32)
+        && isOptString(data, 'free_fire_ign', 64)
+        && isValidId(data.tournament_id)
+        && isOptString(data, 'tournament_title', 160)
+        && data.amount is number && data.amount >= 0 && data.amount <= 100000
+        && isOptString(data, 'upi_id', 128)
+        && data.transaction_ref is string && data.transaction_ref.size() >= 4 && data.transaction_ref.size() <= 128
+        && isOptString(data, 'screenshot_url', 350000)
+        && isOptString(data, 'whatsapp_number', 32)
+        && data.status in ['pending', 'approved', 'rejected', 'refunded']
+        && isOptString(data, 'rejection_reason', 500)
+        && isOptString(data, 'verified_by_admin_id', 128)
+        && isOptString(data, 'verified_by_admin_name', 100)
+        && isOptString(data, 'verified_at', 64)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidResult(data) {
+      return data.keys().hasAll(['id', 'tournament_id', 'rank', 'player_name', 'kills', 'placement_points', 'total_points', 'prize_amount', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'tournament_id', 'rank', 'user_id', 'player_name', 'kills', 'placement_points', 'kill_points', 'total_points', 'prize_amount', 'notes', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.tournament_id)
+        && data.rank is number && data.rank >= 1 && data.rank <= 200
+        && isOptString(data, 'user_id', 128)
+        && data.player_name is string && data.player_name.size() <= 100
+        && data.kills is number && data.kills >= 0
+        && data.placement_points is number && data.placement_points >= 0
+        && (!('kill_points' in data) || (data.kill_points is number && data.kill_points >= 0))
+        && data.total_points is number && data.total_points >= 0
+        && data.prize_amount is number && data.prize_amount >= 0
+        && isOptString(data, 'notes', 500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['id', 'player_name', 'total_points', 'total_earnings', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'user_id', 'player_name', 'free_fire_ign', 'avatar_url', 'total_matches', 'wins', 'total_kills', 'total_points', 'total_earnings', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isOptString(data, 'user_id', 128)
+        && data.player_name is string && data.player_name.size() <= 100
+        && isOptString(data, 'free_fire_ign', 64)
+        && isOptString(data, 'avatar_url', 350000)
+        && (!('total_matches' in data) || data.total_matches is number)
+        && (!('wins' in data) || data.wins is number)
+        && (!('total_kills' in data) || data.total_kills is number)
+        && data.total_points is number && data.total_points >= 0
+        && data.total_earnings is number && data.total_earnings >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTeam(data) {
+      return data.keys().hasAll(['id', 'name', 'captain_id', 'member_uids', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'tag', 'captain_id', 'member_uids', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 64
+        && isOptString(data, 'tag', 12)
+        && isValidId(data.captain_id)
+        && data.member_uids is list && data.member_uids.size() >= 1 && data.member_uids.size() <= 2
+        && data.member_uids[0] is string && data.member_uids[0].size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTeamInvite(data) {
+      return data.keys().hasAll(['id', 'team_id', 'captain_id', 'invited_user_id', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'team_id', 'team_name', 'captain_id', 'captain_name', 'invited_user_id', 'invited_username', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.team_id)
+        && isOptString(data, 'team_name', 64)
+        && isValidId(data.captain_id)
+        && isOptString(data, 'captain_name', 64)
+        && isValidId(data.invited_user_id)
+        && isOptString(data, 'invited_username', 64)
+        && data.status in ['pending', 'accepted', 'declined']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll(['id', 'ticket_code', 'user_id', 'category', 'subject', 'message', 'status', 'priority', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ticket_code', 'user_id', 'username', 'category', 'subject', 'message', 'status', 'priority', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.ticket_code is string && data.ticket_code.size() <= 32
+        && isValidId(data.user_id)
+        && isOptString(data, 'username', 64)
+        && data.category is string && data.category.size() <= 64
+        && data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 200
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 4000
+        && data.status in ['open', 'in_progress', 'resolved', 'closed']
+        && data.priority in ['low', 'normal', 'high', 'urgent']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupportReply(data) {
+      return data.keys().hasAll(['id', 'ticket_id', 'ticket_owner_id', 'user_id', 'is_admin', 'message', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ticket_id', 'ticket_owner_id', 'user_id', 'username', 'is_admin', 'message', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.ticket_id)
+        && isValidId(data.ticket_owner_id)
+        && isValidId(data.user_id)
+        && isOptString(data, 'username', 64)
+        && data.is_admin in [0, 1]
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 4000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'user_id', 'title', 'message', 'type', 'is_read', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'user_id', 'title', 'message', 'type', 'is_read', 'link_url', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.user_id)
+        && data.title is string && data.title.size() <= 160
+        && data.message is string && data.message.size() <= 1000
+        && data.type is string && data.type.size() <= 32
+        && data.is_read in [0, 1]
+        && isOptString(data, 'link_url', 300)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSiteSettings(data) {
+      return data.keys().hasAll(['site_name', 'upi_id', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['site_name', 'upi_id', 'whatsapp_number', 'whatsapp_url', 'support_email', 'contact_phone', 'payment_qr_url', 'site_tagline', 'site_description', 'site_logo', 'default_timezone', 'maintenance_mode', 'registration_enabled', 'primary_theme_color', 'secondary_theme_color', 'background_theme_color', 'scoring_rules', 'footer_text', 'social_instagram', 'social_youtube', 'social_discord', 'social_telegram', 'createdAt', 'updatedAt'])
+        && data.site_name is string && data.site_name.size() <= 150
+        && data.upi_id is string && data.upi_id.size() <= 128
+        && isOptString(data, 'whatsapp_number', 32)
+        && isOptString(data, 'whatsapp_url', 300)
+        && isOptString(data, 'support_email', 150)
+        && isOptString(data, 'contact_phone', 32)
+        && isOptString(data, 'payment_qr_url', 350000)
+        && isOptString(data, 'site_tagline', 300)
+        && isOptString(data, 'site_description', 1000)
+        && isOptString(data, 'site_logo', 350000)
+        && isOptString(data, 'default_timezone', 64)
+        && isOptString(data, 'maintenance_mode', 16)
+        && isOptString(data, 'registration_enabled', 16)
+        && isOptString(data, 'primary_theme_color', 32)
+        && isOptString(data, 'secondary_theme_color', 32)
+        && isOptString(data, 'background_theme_color', 32)
+        && isOptString(data, 'scoring_rules', 2000)
+        && isOptString(data, 'footer_text', 500)
+        && isOptString(data, 'social_instagram', 300)
+        && isOptString(data, 'social_youtube', 300)
+        && isOptString(data, 'social_discord', 300)
+        && isOptString(data, 'social_telegram', 300)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWebsitePage(data) {
+      return data.keys().hasAll(['id', 'title', 'slug', 'content', 'is_published', 'version', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'slug', 'content', 'meta_title', 'meta_description', 'og_title', 'og_description', 'og_image', 'is_published', 'is_system', 'version', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.title is string && data.title.size() <= 200
+        && data.slug is string && data.slug.size() <= 128
+        && data.content is string && data.content.size() <= 100000
+        && isOptString(data, 'meta_title', 200)
+        && isOptString(data, 'meta_description', 500)
+        && isOptString(data, 'og_title', 200)
+        && isOptString(data, 'og_description', 500)
+        && isOptString(data, 'og_image', 350000)
+        && data.is_published in [0, 1]
+        && (!('is_system' in data) || data.is_system in [0, 1])
+        && data.version is number && data.version >= 1
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWebsitePageVersion(data) {
+      return data.keys().hasAll(['id', 'page_id', 'version_num', 'title', 'slug', 'content', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'page_id', 'version_num', 'title', 'slug', 'content', 'meta_title', 'meta_description', 'edited_by_admin_name', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.page_id)
+        && data.version_num is number && data.version_num >= 1
+        && data.title is string && data.title.size() <= 200
+        && data.slug is string && data.slug.size() <= 128
+        && data.content is string && data.content.size() <= 100000
+        && isOptString(data, 'meta_title', 200)
+        && isOptString(data, 'meta_description', 500)
+        && isOptString(data, 'edited_by_admin_name', 100)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHomepageSection(data) {
+      return data.keys().hasAll(['id', 'section_key', 'title', 'sort_order', 'is_enabled', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'section_key', 'title', 'subtitle', 'content_json', 'sort_order', 'is_enabled', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.section_key is string && data.section_key.size() <= 64
+        && data.title is string && data.title.size() <= 200
+        && isOptString(data, 'subtitle', 500)
+        && isOptString(data, 'content_json', 10000)
+        && data.sort_order is number
+        && data.is_enabled in [0, 1]
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNavigationItem(data) {
+      return data.keys().hasAll(['id', 'label', 'url', 'sort_order', 'is_visible', 'is_footer', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'label', 'url', 'target', 'sort_order', 'is_visible', 'is_footer', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.label is string && data.label.size() <= 80
+        && data.url is string && data.url.size() <= 300
+        && isOptString(data, 'target', 16)
+        && data.sort_order is number
+        && data.is_visible in [0, 1]
+        && data.is_footer in [0, 1]
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFaqItem(data) {
+      return data.keys().hasAll(['id', 'category', 'question', 'answer', 'sort_order', 'is_published', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'category', 'question', 'answer', 'sort_order', 'is_published', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.category is string && data.category.size() <= 64
+        && data.question is string && data.question.size() <= 500
+        && data.answer is string && data.answer.size() <= 4000
+        && data.sort_order is number
+        && data.is_published in [0, 1]
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['id', 'title', 'content', 'banner_type', 'is_banner_visible', 'is_published', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'content', 'banner_type', 'is_banner_visible', 'is_published', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.title is string && data.title.size() <= 200
+        && data.content is string && data.content.size() <= 1000
+        && data.banner_type in ['info', 'urgent', 'success', 'warning']
+        && data.is_banner_visible in [0, 1]
+        && data.is_published in [0, 1]
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMediaItem(data) {
+      return data.keys().hasAll(['id', 'file_name', 'url', 'uploaded_by', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'file_name', 'url', 'uploaded_by', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.file_name is string && data.file_name.size() <= 160
+        && data.url is string && data.url.size() <= 350000
+        && isValidId(data.uploaded_by)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminActivityLog(data) {
+      return data.keys().hasAll(['id', 'admin_id', 'admin_name', 'action', 'details', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'admin_id', 'admin_name', 'action', 'details', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.admin_id)
+        && data.admin_name is string && data.admin_name.size() <= 100
+        && data.action is string && data.action.size() <= 100
+        && data.details is string && data.details.size() <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // ---------------------------------------------------------
+    // COLLECTION RULES
+    // ---------------------------------------------------------
+
+    // Connection validation document for testConnection()
+    match /test/{docId} {
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, create, update, delete: if false;
+    }
+
+    // Authoritative Admin RBAC records (Super Admin controlled)
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(userId)
+        && isSuperAdmin()
+        && isValidAdminRoleRecord(incoming())
+        && incoming().uid == userId
+        && incoming().assignedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isSuperAdmin()
+        && isValidAdminRoleRecord(incoming())
+        && incoming().uid == existing().uid
+        && incoming().assignedBy == request.auth.uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'email', 'assignedBy', 'updatedAt']);
+      allow delete: if isValidId(userId) && isSuperAdmin() && userId != request.auth.uid;
+    }
+
+    // Public User Profiles (NO PII) + Split Private PII Subcollection
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin() || isVerifiedUser());
+      allow list: if isAdmin() || (isVerifiedUser() && resource.data.is_deactivated == false);
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserPublicProfile(incoming())
+        && incoming().uid == userId
+        && incoming().role == 'user'
+        && incoming().is_blocked == false
+        && incoming().is_deactivated == false
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidUserPublicProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isSuperAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'is_blocked', 'is_deactivated', 'full_name', 'free_fire_uid', 'free_fire_ign', 'avatar_url', 'updatedAt']))
+          || (isOwner(userId) && !isBlockedUser() && incoming().role == existing().role && incoming().is_blocked == existing().is_blocked && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'free_fire_uid', 'free_fire_ign', 'avatar_url', 'is_deactivated', 'updatedAt']))
+        );
+      allow delete: if false;
+
+      match /private/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && (isOwner(userId) || isSuperAdmin());
+        allow list: if isSuperAdmin();
+        allow create: if isValidId(userId) && isValidId(docId) && docId == 'info'
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming())
+          && incoming().uid == userId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(docId) && docId == 'info'
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming())
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['phone', 'email', 'updatedAt']);
+        allow delete: if false;
+      }
+    }
+
+    // Tournaments (Atomic slot decrement requires simultaneous Registration creation)
+    match /tournaments/{tournamentId} {
+      allow get: if isValidId(tournamentId) && (existing().is_published == 1 || hasStaffRole(['super_admin', 'tournament_manager']));
+      allow list: if resource.data.is_published == 1 || hasStaffRole(['super_admin', 'tournament_manager']);
+      allow create: if isValidId(tournamentId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidTournament(incoming())
+        && incoming().id == tournamentId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(tournamentId)
+        && isValidTournament(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (hasStaffRole(['super_admin', 'tournament_manager']) && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'slug', 'banner_image', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'reg_open_at', 'reg_close_at', 'match_at', 'rules_text', 'status', 'is_published', 'updatedAt']))
+          || (
+            isVerifiedUser()
+            && !isBlockedUser()
+            && existing().status == 'Registration Open'
+            && existing().available_slots > 0
+            && incoming().diff(existing()).affectedKeys().hasOnly(['available_slots', 'updatedAt'])
+            && incoming().available_slots == existing().available_slots - 1
+            && existsAfter(/databases/$(database)/documents/registrations/$(tournamentId + '_' + request.auth.uid))
+          )
+        );
+      allow delete: if isValidId(tournamentId) && hasStaffRole(['super_admin', 'tournament_manager']);
+    }
+
+    // Public Room Schedule (No secret Room ID or Password)
+    match /rooms/{tournamentId} {
+      allow get: if isValidId(tournamentId) && (existing().is_published == 1 || hasStaffRole(['super_admin', 'tournament_manager']));
+      allow list: if resource.data.is_published == 1 || hasStaffRole(['super_admin', 'tournament_manager']);
+      allow create: if isValidId(tournamentId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidRoomSchedule(incoming())
+        && incoming().tournament_id == tournamentId
+        && exists(/databases/$(database)/documents/tournaments/$(tournamentId))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(tournamentId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidRoomSchedule(incoming())
+        && incoming().tournament_id == existing().tournament_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['opening_time', 'match_start_time', 'closing_time', 'opening_at', 'status', 'is_published', 'updatedAt']);
+      allow delete: if isValidId(tournamentId) && hasStaffRole(['super_admin', 'tournament_manager']);
+    }
+
+    // Confidential Room Credentials (Strictly gated by approved registration + opening time/status OR staff)
+    match /room_secrets/{tournamentId} {
+      allow get: if isValidId(tournamentId) && isVerifiedUser() && (
+        hasStaffRole(['super_admin', 'tournament_manager'])
+        || (
+          exists(/databases/$(database)/documents/registrations/$(tournamentId + '_' + request.auth.uid))
+          && get(/databases/$(database)/documents/registrations/$(tournamentId + '_' + request.auth.uid)).data.payment_status == 'approved'
+          && exists(/databases/$(database)/documents/rooms/$(tournamentId))
+          && (
+            get(/databases/$(database)/documents/rooms/$(tournamentId)).data.opening_at <= request.time
+            || get(/databases/$(database)/documents/rooms/$(tournamentId)).data.status in ['open', 'live']
+          )
+        )
+      );
+      allow list: if false;
+      allow create: if isValidId(tournamentId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidRoomSecrets(incoming())
+        && incoming().tournament_id == tournamentId
+        && exists(/databases/$(database)/documents/tournaments/$(tournamentId))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(tournamentId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidRoomSecrets(incoming())
+        && incoming().tournament_id == existing().tournament_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['room_id_code', 'room_password', 'updatedAt']);
+      allow delete: if isValidId(tournamentId) && hasStaffRole(['super_admin', 'tournament_manager']);
+    }
+
+    // Tournament Registrations (Deterministic ID: tournamentId_uid)
+    match /registrations/{registrationId} {
+      allow get: if isValidLongId(registrationId) && (
+        existing().payment_status in ['approved', 'pending']
+        || (isVerifiedUser() && existing().user_id == request.auth.uid)
+        || isAdmin()
+      );
+      allow list: if resource.data.payment_status in ['approved', 'pending']
+        || (isVerifiedUser() && resource.data.user_id == request.auth.uid)
+        || isAdmin();
+      allow create: if isValidLongId(registrationId)
+        && isVerifiedUser()
+        && !isBlockedUser()
+        && isValidRegistration(incoming())
+        && incoming().id == registrationId
+        && registrationId == (incoming().tournament_id + '_' + request.auth.uid)
+        && incoming().user_id == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/tournaments/$(incoming().tournament_id))
+        && get(/databases/$(database)/documents/tournaments/$(incoming().tournament_id)).data.status == 'Registration Open'
+        && (
+          (incoming().payment_status == 'pending' && get(/databases/$(database)/documents/tournaments/$(incoming().tournament_id)).data.entry_fee > 0)
+          || (incoming().payment_status == 'approved' && get(/databases/$(database)/documents/tournaments/$(incoming().tournament_id)).data.entry_fee == 0)
+        )
+        && getAfter(/databases/$(database)/documents/tournaments/$(incoming().tournament_id)).data.available_slots == get(/databases/$(database)/documents/tournaments/$(incoming().tournament_id)).data.available_slots - 1;
+      allow update: if isValidLongId(registrationId)
+        && isValidRegistration(incoming())
+        && incoming().id == existing().id
+        && incoming().tournament_id == existing().tournament_id
+        && incoming().user_id == existing().user_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && hasStaffRole(['super_admin', 'payment_manager'])
+        && incoming().diff(existing()).affectedKeys().hasOnly(['payment_status', 'rejection_reason', 'updatedAt']);
+      allow delete: if isValidLongId(registrationId) && isSuperAdmin();
+    }
+
+    // UPI Payments & Admin Verification (UTR & receipts strictly isolated from non-owners)
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && isVerifiedUser() && (existing().user_id == request.auth.uid || hasStaffRole(['super_admin', 'payment_manager']));
+      allow list: if isVerifiedUser() && (resource.data.user_id == request.auth.uid || hasStaffRole(['super_admin', 'payment_manager']));
+      allow create: if isValidId(paymentId)
+        && isVerifiedUser()
+        && !isBlockedUser()
+        && isValidPayment(incoming())
+        && incoming().id == paymentId
+        && incoming().user_id == request.auth.uid
+        && incoming().status == 'pending'
+        && !('verified_by_admin_id' in incoming())
+        && exists(/databases/$(database)/documents/registrations/$(incoming().registration_id))
+        && get(/databases/$(database)/documents/registrations/$(incoming().registration_id)).data.user_id == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(paymentId)
+        && hasStaffRole(['super_admin', 'payment_manager'])
+        && isValidPayment(incoming())
+        && incoming().id == existing().id
+        && incoming().user_id == existing().user_id
+        && incoming().tournament_id == existing().tournament_id
+        && incoming().registration_id == existing().registration_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'rejection_reason', 'verified_by_admin_id', 'verified_by_admin_name', 'verified_at', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Match Results & Overall Leaderboard
+    match /results/{resultId} {
+      allow get: if isValidId(resultId);
+      allow list: if resource.data.rank >= 1;
+      allow create: if isValidId(resultId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidResult(incoming())
+        && incoming().id == resultId
+        && exists(/databases/$(database)/documents/tournaments/$(incoming().tournament_id))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(resultId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidResult(incoming())
+        && incoming().id == existing().id
+        && incoming().tournament_id == existing().tournament_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['rank', 'user_id', 'player_name', 'kills', 'placement_points', 'kill_points', 'total_points', 'prize_amount', 'notes', 'updatedAt']);
+      allow delete: if isValidId(resultId) && hasStaffRole(['super_admin', 'tournament_manager']);
+    }
+
+    match /leaderboard/{entryId} {
+      allow get: if isValidId(entryId);
+      allow list: if resource.data.total_points >= 0;
+      allow create: if isValidId(entryId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidLeaderboardEntry(incoming())
+        && incoming().id == entryId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(entryId)
+        && hasStaffRole(['super_admin', 'tournament_manager'])
+        && isValidLeaderboardEntry(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['user_id', 'player_name', 'free_fire_ign', 'avatar_url', 'total_matches', 'wins', 'total_kills', 'total_points', 'total_earnings', 'updatedAt']);
+      allow delete: if isValidId(entryId) && isSuperAdmin();
+    }
+
+    // Duo Teams & Invites
+    match /teams/{teamId} {
+      allow get: if isValidId(teamId) && isVerifiedUser() && (request.auth.uid in existing().member_uids || isAdmin());
+      allow list: if isVerifiedUser() && (request.auth.uid in resource.data.member_uids || isAdmin());
+      allow create: if isValidId(teamId)
+        && isVerifiedUser()
+        && !isBlockedUser()
+        && isValidTeam(incoming())
+        && incoming().id == teamId
+        && incoming().captain_id == request.auth.uid
+        && request.auth.uid in incoming().member_uids
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(teamId)
+        && isVerifiedUser()
+        && isValidTeam(incoming())
+        && incoming().id == existing().id
+        && incoming().captain_id == existing().captain_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isSuperAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'tag', 'member_uids', 'updatedAt']))
+          || (existing().captain_id == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'tag', 'member_uids', 'updatedAt']))
+          || (request.auth.uid in incoming().member_uids && incoming().diff(existing()).affectedKeys().hasOnly(['member_uids', 'updatedAt']))
+        );
+      allow delete: if isValidId(teamId) && (isSuperAdmin() || (isVerifiedUser() && existing().captain_id == request.auth.uid));
+    }
+
+    match /team_invites/{inviteId} {
+      allow get: if isValidId(inviteId) && isVerifiedUser() && (existing().invited_user_id == request.auth.uid || existing().captain_id == request.auth.uid || isAdmin());
+      allow list: if isVerifiedUser() && (resource.data.invited_user_id == request.auth.uid || resource.data.captain_id == request.auth.uid || isAdmin());
+      allow create: if isValidId(inviteId)
+        && isVerifiedUser()
+        && !isBlockedUser()
+        && isValidTeamInvite(incoming())
+        && incoming().id == inviteId
+        && incoming().captain_id == request.auth.uid
+        && incoming().status == 'pending'
+        && exists(/databases/$(database)/documents/teams/$(incoming().team_id))
+        && get(/databases/$(database)/documents/teams/$(incoming().team_id)).data.captain_id == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(inviteId)
+        && isVerifiedUser()
+        && isValidTeamInvite(incoming())
+        && incoming().id == existing().id
+        && incoming().team_id == existing().team_id
+        && incoming().captain_id == existing().captain_id
+        && incoming().invited_user_id == existing().invited_user_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && existing().status == 'pending'
+        && existing().invited_user_id == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(inviteId) && isSuperAdmin();
+    }
+
+    // Support Tickets & Thread Replies (Master Gate on parent ticket)
+    match /support_tickets/{ticketId} {
+      allow get: if isValidId(ticketId) && isVerifiedUser() && (existing().user_id == request.auth.uid || hasStaffRole(['super_admin', 'support_manager']));
+      allow list: if isVerifiedUser() && (resource.data.user_id == request.auth.uid || hasStaffRole(['super_admin', 'support_manager']));
+      allow create: if isValidId(ticketId)
+        && isVerifiedUser()
+        && !isBlockedUser()
+        && isValidSupportTicket(incoming())
+        && incoming().id == ticketId
+        && incoming().user_id == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(ticketId)
+        && isVerifiedUser()
+        && isValidSupportTicket(incoming())
+        && incoming().id == existing().id
+        && incoming().user_id == existing().user_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (hasStaffRole(['super_admin', 'support_manager']) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'updatedAt']))
+          || (existing().user_id == request.auth.uid && existing().status != 'closed' && incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']))
+        );
+      allow delete: if false;
+
+      match /replies/{replyId} {
+        allow get: if isValidId(ticketId) && isValidId(replyId) && isVerifiedUser() && (
+          hasStaffRole(['super_admin', 'support_manager'])
+          || get(/databases/$(database)/documents/support_tickets/$(ticketId)).data.user_id == request.auth.uid
+        );
+        allow list: if isValidId(ticketId) && isVerifiedUser() && (
+          hasStaffRole(['super_admin', 'support_manager'])
+          || resource.data.ticket_owner_id == request.auth.uid
+        );
+        allow create: if isValidId(ticketId) && isValidId(replyId)
+          && isVerifiedUser()
+          && !isBlockedUser()
+          && isValidSupportReply(incoming())
+          && incoming().id == replyId
+          && incoming().ticket_id == ticketId
+          && incoming().user_id == request.auth.uid
+          && exists(/databases/$(database)/documents/support_tickets/$(ticketId))
+          && incoming().ticket_owner_id == get(/databases/$(database)/documents/support_tickets/$(ticketId)).data.user_id
+          && (
+            (hasStaffRole(['super_admin', 'support_manager']) && incoming().is_admin == 1)
+            || (get(/databases/$(database)/documents/support_tickets/$(ticketId)).data.user_id == request.auth.uid && incoming().is_admin == 0)
+          )
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isVerifiedUser() && (existing().user_id == request.auth.uid || isAdmin());
+      allow list: if isVerifiedUser() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isValidId(notificationId)
+        && isVerifiedUser()
+        && isValidNotification(incoming())
+        && incoming().id == notificationId
+        && (isAdmin() || incoming().user_id == request.auth.uid)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(notificationId)
+        && isVerifiedUser()
+        && isValidNotification(incoming())
+        && incoming().id == existing().id
+        && incoming().user_id == existing().user_id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (existing().user_id == request.auth.uid || isAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['is_read', 'updatedAt']);
+      allow delete: if isValidId(notificationId) && isSuperAdmin();
+    }
+
+    // Global Site Settings (Public read on 'public' doc; Super Admin write)
+    match /settings/{settingDocId} {
+      allow get: if isValidId(settingDocId) && settingDocId == 'public';
+      allow list: if false;
+      allow create: if isValidId(settingDocId) && settingDocId == 'public'
+        && isSuperAdmin()
+        && isValidSiteSettings(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(settingDocId) && settingDocId == 'public'
+        && isSuperAdmin()
+        && isValidSiteSettings(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['site_name', 'upi_id', 'whatsapp_number', 'whatsapp_url', 'support_email', 'contact_phone', 'payment_qr_url', 'site_tagline', 'site_description', 'site_logo', 'default_timezone', 'maintenance_mode', 'registration_enabled', 'primary_theme_color', 'secondary_theme_color', 'background_theme_color', 'scoring_rules', 'footer_text', 'social_instagram', 'social_youtube', 'social_discord', 'social_telegram', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // CMS Pages & Revisions
+    match /website_pages/{pageId} {
+      allow get: if isValidId(pageId) && (existing().is_published == 1 || hasStaffRole(['super_admin', 'content_manager']));
+      allow list: if resource.data.is_published == 1 || hasStaffRole(['super_admin', 'content_manager']);
+      allow create: if isValidId(pageId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidWebsitePage(incoming())
+        && incoming().id == pageId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(pageId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidWebsitePage(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'slug', 'content', 'meta_title', 'meta_description', 'og_title', 'og_description', 'og_image', 'is_published', 'is_system', 'version', 'updatedAt']);
+      allow delete: if isValidId(pageId) && hasStaffRole(['super_admin', 'content_manager']) && existing().is_system == 0;
+
+      match /versions/{versionId} {
+        allow get: if isValidId(pageId) && isValidId(versionId) && hasStaffRole(['super_admin', 'content_manager']);
+        allow list: if isValidId(pageId) && hasStaffRole(['super_admin', 'content_manager']);
+        allow create: if isValidId(pageId) && isValidId(versionId)
+          && hasStaffRole(['super_admin', 'content_manager'])
+          && isValidWebsitePageVersion(incoming())
+          && incoming().id == versionId
+          && incoming().page_id == pageId
+          && exists(/databases/$(database)/documents/website_pages/$(pageId))
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    match /homepage_sections/{sectionId} {
+      allow get: if isValidId(sectionId) && (existing().is_enabled == 1 || hasStaffRole(['super_admin', 'content_manager']));
+      allow list: if resource.data.is_enabled == 1 || hasStaffRole(['super_admin', 'content_manager']);
+      allow create: if isValidId(sectionId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidHomepageSection(incoming())
+        && incoming().id == sectionId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(sectionId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidHomepageSection(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['section_key', 'title', 'subtitle', 'content_json', 'sort_order', 'is_enabled', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /navigation_items/{itemId} {
+      allow get: if isValidId(itemId) && (existing().is_visible == 1 || hasStaffRole(['super_admin', 'content_manager']));
+      allow list: if resource.data.is_visible == 1 || hasStaffRole(['super_admin', 'content_manager']);
+      allow create: if isValidId(itemId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidNavigationItem(incoming())
+        && incoming().id == itemId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(itemId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidNavigationItem(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'url', 'target', 'sort_order', 'is_visible', 'is_footer', 'updatedAt']);
+      allow delete: if isValidId(itemId) && hasStaffRole(['super_admin', 'content_manager']);
+    }
+
+    match /faqs/{faqId} {
+      allow get: if isValidId(faqId) && (existing().is_published == 1 || hasStaffRole(['super_admin', 'content_manager']));
+      allow list: if resource.data.is_published == 1 || hasStaffRole(['super_admin', 'content_manager']);
+      allow create: if isValidId(faqId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidFaqItem(incoming())
+        && incoming().id == faqId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(faqId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidFaqItem(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['category', 'question', 'answer', 'sort_order', 'is_published', 'updatedAt']);
+      allow delete: if isValidId(faqId) && hasStaffRole(['super_admin', 'content_manager']);
+    }
+
+    match /announcements/{announcementId} {
+      allow get: if isValidId(announcementId) && (existing().is_published == 1 || hasStaffRole(['super_admin', 'content_manager']));
+      allow list: if resource.data.is_published == 1 || hasStaffRole(['super_admin', 'content_manager']);
+      allow create: if isValidId(announcementId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidAnnouncement(incoming())
+        && incoming().id == announcementId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(announcementId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidAnnouncement(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'banner_type', 'is_banner_visible', 'is_published', 'updatedAt']);
+      allow delete: if isValidId(announcementId) && hasStaffRole(['super_admin', 'content_manager']);
+    }
+
+    match /media_library/{mediaId} {
+      allow get, list: if hasStaffRole(['super_admin', 'content_manager']);
+      allow create: if isValidId(mediaId)
+        && hasStaffRole(['super_admin', 'content_manager'])
+        && isValidMediaItem(incoming())
+        && incoming().id == mediaId
+        && incoming().uploaded_by == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(mediaId) && hasStaffRole(['super_admin', 'content_manager']);
+    }
+
+    match /admin_activity_logs/{logId} {
+      allow get, list: if isSuperAdmin();
+      allow create: if isValidId(logId)
+        && isAdmin()
+        && isValidAdminActivityLog(incoming())
+        && incoming().id == logId
+        && incoming().admin_id == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

@@ -62,11 +62,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
   const [profileAvatar, setProfileAvatar] = useState(user?.avatar_url || '');
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
 
-  const [currentPass, setCurrentPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
-  const [passMsg, setPassMsg] = useState<{ text: string; isError: boolean } | null>(null);
-
   const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -158,7 +153,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
     }
   };
 
-  const handleInviteTeammate = async (teamId: number) => {
+  const handleInviteTeammate = async (teamId: string | number) => {
     if (!inviteUsername.trim()) return;
     setTeamMsg(null);
     try {
@@ -174,7 +169,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
     }
   };
 
-  const handleInviteResponse = async (inviteId: number, accept: boolean) => {
+  const handleInviteResponse = async (inviteId: string | number, accept: boolean) => {
     try {
       await apiRequest(`/teams/invites/${inviteId}/respond`, {
         method: 'POST',
@@ -234,27 +229,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
       setTimeout(() => setProfileMsg(null), 3000);
     } catch (err: any) {
       setProfileMsg(err.message);
-    }
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPassMsg(null);
-    if (newPass !== confirmPass) {
-      setPassMsg({ text: 'Passwords do not match.', isError: true });
-      return;
-    }
-    try {
-      await apiRequest('/auth/change-password', {
-        method: 'PUT',
-        body: JSON.stringify({ currentPassword: currentPass, newPassword: newPass })
-      });
-      setCurrentPass('');
-      setNewPass('');
-      setConfirmPass('');
-      setPassMsg({ text: 'Password updated.', isError: false });
-    } catch (err: any) {
-      setPassMsg({ text: err.message, isError: true });
     }
   };
 
@@ -886,22 +860,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
                 </button>
               </form>
 
-              <form onSubmit={handleChangePassword} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
-                <h4 className="font-gaming font-bold text-base text-slate-900 dark:text-white">Change Password</h4>
-                {passMsg && (
-                  <div className={`p-3 rounded-xl text-xs ${passMsg.isError ? 'bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
-                    {passMsg.text}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input type="password" required placeholder="Current Password" value={currentPass} onChange={e => setCurrentPass(e.target.value)} className={inputClass} />
-                  <input type="password" required placeholder="New Password" value={newPass} onChange={e => setNewPass(e.target.value)} className={inputClass} />
-                  <input type="password" required placeholder="Confirm Password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} className={inputClass} />
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex items-center gap-2 font-gaming font-bold text-base text-slate-900 dark:text-white">
+                  <Shield className="w-4 h-4 text-emerald-500" />
+                  <span>Google Sign-In Security</span>
                 </div>
-                <button type="submit" className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-gaming font-bold text-xs rounded-xl">
-                  Update Password
-                </button>
-              </form>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Your account is protected by Firebase Google Authentication ({user.email}). Passwords are managed directly via your Google account.
+                </p>
+              </div>
             </div>
           )}
         </div>
