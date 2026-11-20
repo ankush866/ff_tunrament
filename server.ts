@@ -79,6 +79,12 @@ async function startServer() {
     res.send(`User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: ${baseUrl}/sitemap.xml\n`);
   });
 
+  // Google Search Console Verification File
+  app.get('/googlef3256bb9c85090e7.html', (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send('google-site-verification: googlef3256bb9c85090e7.html');
+  });
+
   // Mount API Router
   app.use('/api', apiRouter);
 
