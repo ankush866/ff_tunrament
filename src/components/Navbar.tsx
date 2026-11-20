@@ -13,7 +13,6 @@ import {
   HelpCircle,
   Sun,
   Moon,
-  ChevronDown,
   MoreVertical,
   Swords
 } from 'lucide-react';
@@ -33,7 +32,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
   const { isDark, toggleTheme } = useTheme();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [siteName, setSiteName] = useState('FLAXY ESPORTS');
 
@@ -116,19 +114,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
               </button>
             );
           })}
-          {user && (
-            <button
-              type="button"
-              onClick={() => onNavigate('dashboard', { tab: 'payments' })}
-              className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                currentView === 'dashboard'
-                  ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 font-semibold'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/70'
-              }`}
-            >
-              Wallet
-            </button>
-          )}
         </nav>
 
         {/* Zone 3: 1-Click Theme Switch, Admin, Notifications, Account */}
@@ -177,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                 type="button"
                 onClick={() => {
                   setShowNotifications(!showNotifications);
-                  setShowUserMenu(false);
+                  setShowMobileMenu(false);
                 }}
                 aria-label="Notifications"
                 title="Notifications"
@@ -253,128 +238,29 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             </div>
           )}
 
-          {/* User Dropdown or Login CTA */}
+          {/* User Profile Badge (opens Profile directly) or Login CTA */}
           {user ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUserMenu(!showUserMenu);
-                  setShowNotifications(false);
-                }}
-                className="min-h-[40px] flex items-center gap-2 px-1.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
-              >
-                <img
-                  src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
-                  alt={user.username}
-                  referrerPolicy="no-referrer"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR; }}
-                  className="w-7 h-7 rounded-lg object-cover border border-orange-500/40 shrink-0"
-                />
-                <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 hidden sm:inline max-w-[100px] truncate">
-                  {user.free_fire_ign || user.username}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden sm:block shrink-0" />
-              </button>
-
-              {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-2 z-50">
-                  <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 mb-1">
-                    <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">{user.full_name || user.username}</div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'overview' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    <UserIcon className="w-4 h-4 text-orange-500" />
-                    <span>Profile</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'payments' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    <Wallet className="w-4 h-4 text-emerald-500" />
-                    <span>Wallet</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'tournaments' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    <Trophy className="w-4 h-4 text-amber-500" />
-                    <span>Joined</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'matches' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    <Swords className="w-4 h-4 text-red-500" />
-                    <span>History</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'teams' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    <Users className="w-4 h-4 text-cyan-500" />
-                    <span>Teams</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'notifications' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center justify-between gap-2 cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-orange-500" />
-                      <span>Alerts</span>
-                    </span>
-                    {unreadCount > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-600 text-white tabular-nums">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'support' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    <HelpCircle className="w-4 h-4 text-purple-500" />
-                    <span>Support</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); onNavigate('dashboard', { tab: 'settings' }); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    <Settings className="w-4 h-4 text-slate-500" />
-                    <span>Settings</span>
-                  </button>
-                  {isStaff && (
-                    <button
-                      type="button"
-                      onClick={() => { setShowUserMenu(false); onNavigate('admin'); }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 rounded-lg flex items-center gap-2 cursor-pointer"
-                    >
-                      <Shield className="w-4 h-4" />
-                      <span>Admin Panel</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { setShowUserMenu(false); logout(); }}
-                    className="w-full text-left px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-2 border-t border-slate-200 dark:border-slate-800 mt-1 cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Logout</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowNotifications(false);
+                setShowMobileMenu(false);
+                onNavigate('dashboard', { tab: 'overview' });
+              }}
+              title="Open Profile"
+              className="min-h-[40px] flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+            >
+              <img
+                src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
+                alt={user.username}
+                referrerPolicy="no-referrer"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR; }}
+                className="w-7 h-7 rounded-lg object-cover border border-orange-500/40 shrink-0"
+              />
+              <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 hidden sm:inline max-w-[100px] truncate">
+                {user.free_fire_ign || user.username}
+              </span>
+            </button>
           ) : (
             <button
               type="button"
@@ -386,100 +272,136 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             </button>
           )}
 
-          {/* Mobile 3-Dot Drawer Trigger */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowMobileMenu(!showMobileMenu);
-              setShowNotifications(false);
-              setShowUserMenu(false);
-            }}
-            className="lg:hidden min-h-[40px] min-w-[40px] p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0 cursor-pointer"
-            aria-label="Open menu"
-          >
-            {showMobileMenu ? <X className="w-5 h-5" /> : <MoreVertical className="w-5 h-5" />}
-          </button>
+          {/* Always-Visible 3-Dot Menu (Mobile + Desktop) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowMobileMenu(!showMobileMenu);
+                setShowNotifications(false);
+              }}
+              className={`min-h-[40px] min-w-[40px] p-2 rounded-xl border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                showMobileMenu
+                  ? 'bg-orange-600 text-white border-orange-600'
+                  : 'bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200'
+              }`}
+              aria-label="Open 3-dot menu"
+              title="Menu"
+            >
+              {showMobileMenu ? <X className="w-5 h-5" /> : <MoreVertical className="w-5 h-5" />}
+            </button>
+
+            {showMobileMenu && (
+              <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 space-y-2.5 max-h-[82vh] overflow-y-auto z-50">
+                {user && (
+                  <div className="px-2.5 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2.5">
+                    <img
+                      src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
+                      alt={user.username}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR; }}
+                      className="w-9 h-9 rounded-xl object-cover border border-orange-500/40 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
+                        {user.full_name || user.username}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        @{user.username} · {user.email}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mobile Navigation Links */}
+                <div className="lg:hidden space-y-1">
+                  {navLinks.map(link => (
+                    <button
+                      key={link.id}
+                      type="button"
+                      onClick={() => { setShowMobileMenu(false); onNavigate(link.id); }}
+                      className="w-full text-left px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+                    >
+                      {link.label}
+                    </button>
+                  ))}
+                </div>
+
+                {user && (
+                  <div className="pt-1 lg:pt-0 lg:border-t-0 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="px-1 pt-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Options
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { tab: 'overview', label: 'Profile', icon: UserIcon, color: 'text-orange-500' },
+                        { tab: 'payments', label: 'Wallet', icon: Wallet, color: 'text-emerald-500' },
+                        { tab: 'tournaments', label: 'Joined', icon: Trophy, color: 'text-amber-500' },
+                        { tab: 'matches', label: 'History', icon: Swords, color: 'text-red-500' },
+                        { tab: 'teams', label: 'Teams', icon: Users, color: 'text-cyan-500' },
+                        { tab: 'notifications', label: 'Alerts', icon: Bell, color: 'text-orange-500', badge: unreadCount },
+                        { tab: 'support', label: 'Support', icon: HelpCircle, color: 'text-purple-500' },
+                        { tab: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-500' }
+                      ].map(item => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.tab}
+                            type="button"
+                            onClick={() => { setShowMobileMenu(false); onNavigate('dashboard', { tab: item.tab }); }}
+                            className="text-left px-3 py-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between gap-1.5 cursor-pointer"
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Icon className={`w-4 h-4 shrink-0 ${item.color}`} />
+                              <span className="truncate">{item.label}</span>
+                            </span>
+                            {item.badge !== undefined && item.badge > 0 && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-600 text-white tabular-nums shrink-0">
+                                {item.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {isStaff && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowMobileMenu(false); onNavigate('admin'); }}
+                    className="w-full text-left px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 rounded-xl font-bold flex items-center gap-2 cursor-pointer"
+                  >
+                    <Shield className="w-4 h-4 shrink-0" />
+                    <span>Admin Panel</span>
+                  </button>
+                )}
+
+                {!user ? (
+                  <button
+                    type="button"
+                    onClick={() => { setShowMobileMenu(false); onOpenAuth('login'); }}
+                    className="w-full py-2.5 px-4 text-xs font-gaming font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>Login / Register</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setShowMobileMenu(false); logout(); }}
+                    className="w-full py-2.5 px-4 text-xs font-bold text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-600 hover:text-white border border-red-500/25 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Logout</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* Compact Mobile 3-Dot Drawer */}
-      {showMobileMenu && (
-        <div className="lg:hidden bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 px-4 py-3 space-y-1.5 max-h-[80vh] overflow-y-auto">
-          {navLinks.map(link => (
-            <button
-              key={link.id}
-              type="button"
-              onClick={() => { setShowMobileMenu(false); onNavigate(link.id); }}
-              className="w-full text-left px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
-            >
-              {link.label}
-            </button>
-          ))}
-
-          {user && (
-            <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
-              <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Account Options ({user.username})
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { tab: 'overview', label: 'Profile', icon: UserIcon, color: 'text-orange-500' },
-                  { tab: 'payments', label: 'Wallet', icon: Wallet, color: 'text-emerald-500' },
-                  { tab: 'tournaments', label: 'Joined', icon: Trophy, color: 'text-amber-500' },
-                  { tab: 'matches', label: 'History', icon: Swords, color: 'text-red-500' },
-                  { tab: 'teams', label: 'Teams', icon: Users, color: 'text-cyan-500' },
-                  { tab: 'notifications', label: 'Alerts', icon: Bell, color: 'text-orange-500' },
-                  { tab: 'support', label: 'Support', icon: HelpCircle, color: 'text-purple-500' },
-                  { tab: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-500' }
-                ].map(item => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.tab}
-                      type="button"
-                      onClick={() => { setShowMobileMenu(false); onNavigate('dashboard', { tab: item.tab }); }}
-                      className="text-left px-3 py-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center gap-2 cursor-pointer"
-                    >
-                      <Icon className={`w-4 h-4 shrink-0 ${item.color}`} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {isStaff && (
-            <button
-              type="button"
-              onClick={() => { setShowMobileMenu(false); onNavigate('admin'); }}
-              className="w-full text-left px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded-xl font-bold flex items-center gap-2"
-            >
-              <Shield className="w-4 h-4" />
-              <span>Admin Panel</span>
-            </button>
-          )}
-          {!user ? (
-            <button
-              type="button"
-              onClick={() => { setShowMobileMenu(false); onOpenAuth('login'); }}
-              className="w-full mt-2 py-2.5 px-4 text-xs font-gaming font-bold bg-orange-600 text-white rounded-xl flex items-center justify-center gap-2"
-            >
-              <UserIcon className="w-3.5 h-3.5" />
-              <span>Login / Register</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => { setShowMobileMenu(false); logout(); }}
-              className="w-full mt-2 py-2.5 px-4 text-xs font-bold text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-600 hover:text-white border border-red-500/25 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Logout ({user.username})</span>
-            </button>
-          )}
-        </div>
-      )}
     </header>
   );
 };
