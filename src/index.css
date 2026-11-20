@@ -4,14 +4,19 @@
 @layer base {
   html, body {
     width: 100%;
-    overflow-x: hidden;
-    touch-action: manipulation;
+    overflow-x: clip;
+    -webkit-overflow-scrolling: touch;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
 
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  button, a, input, select, textarea {
+    touch-action: manipulation;
   }
 
   h1, h2, h3, h4, .font-heading, .font-gaming {

@@ -26,6 +26,8 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({ onNavigate }) 
 
   useEffect(() => {
     fetchTournaments();
+    window.addEventListener('flaxy_tournaments_updated', fetchTournaments);
+    return () => window.removeEventListener('flaxy_tournaments_updated', fetchTournaments);
   }, [selectedMode, selectedStatus]);
 
   const filteredTournaments = tournaments.filter(t =>

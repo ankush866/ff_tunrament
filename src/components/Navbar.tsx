@@ -14,7 +14,8 @@ import {
   Sun,
   Moon,
   MoreVertical,
-  Swords
+  Swords,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 import { useTheme } from '../context/ThemeContext.js';
@@ -63,6 +64,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
     { id: 'faq', label: 'FAQ' }
   ];
 
+  const policyLinks = [
+    { slug: 'privacy-policy', label: 'Privacy Policy' },
+    { slug: 'terms-and-conditions', label: 'Terms & Conditions' },
+    { slug: 'refund-policy', label: 'Refund Policy' },
+    { slug: 'tournament-rules', label: 'Tournament Rules' }
+  ];
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
       {/* Compact Urgent Banner */}
@@ -77,24 +85,24 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
         </div>
       )}
 
-      {/* Main Single-Row Top Bar */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
+      {/* Main Single-Row Top Bar (Brand truncates safely so 3-Dot is ALWAYS visible on mobile) */}
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2">
         {/* Zone 1: Brand Wordmark */}
         <button
           type="button"
           onClick={() => onNavigate('home')}
-          className="flex items-center gap-2.5 cursor-pointer select-none min-w-0 text-left shrink-0"
+          className="flex items-center gap-2 cursor-pointer select-none min-w-0 flex-1 lg:flex-initial text-left"
         >
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-sm shrink-0">
-            <Flame className="w-5 h-5 text-white" />
+            <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
-          <span className="font-gaming font-bold text-base sm:text-lg tracking-wide text-slate-900 dark:text-white whitespace-nowrap shrink-0">
+          <span className="font-gaming font-bold text-sm sm:text-lg tracking-wide text-slate-900 dark:text-white truncate">
             {siteName}
           </span>
         </button>
 
         {/* Zone 2: Clean Desktop Links */}
-        <nav className="hidden lg:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-1 shrink-0">
           {navLinks.map(link => {
             const isActive =
               currentView === link.id ||
@@ -116,15 +124,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
           })}
         </nav>
 
-        {/* Zone 3: 1-Click Theme Switch, Admin, Notifications, Account */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        {/* Zone 3: Theme, Admin, Alerts, Profile, Always-Visible 3-Dot Menu */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* 1-Click Dark / Light Mode Toggle */}
           <button
             type="button"
             onClick={toggleTheme}
             aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             title={isDark ? 'Light Mode' : 'Dark Mode'}
-            className="min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="h-9 sm:h-10 px-2 sm:px-3 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             {isDark ? (
               <>
@@ -144,7 +152,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             <button
               type="button"
               onClick={() => onNavigate('admin')}
-              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              title="Admin Panel"
+              className={`h-9 sm:h-10 px-2 sm:px-3 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 currentView === 'admin'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25'
@@ -166,7 +175,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                 }}
                 aria-label="Notifications"
                 title="Notifications"
-                className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl border flex items-center gap-1.5 relative transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`h-9 sm:h-10 px-2 sm:px-3 rounded-xl border flex items-center justify-center gap-1.5 relative transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   unreadCount > 0
                     ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400'
                     : 'bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200'
@@ -175,7 +184,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                 <Bell className="w-4 h-4 shrink-0" />
                 <span className="hidden md:inline text-xs font-semibold">Alerts</span>
                 {unreadCount > 0 && (
-                  <span className="px-1.5 min-w-[18px] h-[18px] bg-orange-600 text-[10px] font-bold text-white rounded-full flex items-center justify-center tabular-nums">
+                  <span className="px-1 min-w-[16px] h-4 bg-orange-600 text-[10px] font-bold text-white rounded-full flex items-center justify-center tabular-nums">
                     {unreadCount}
                   </span>
                 )}
@@ -208,7 +217,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                       </button>
                     </div>
                   </div>
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/70 mt-2 space-y-1">
+                  <div className="max-h-[65dvh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] divide-y divide-slate-100 dark:divide-slate-800/70 mt-2 space-y-1">
                     {notifications.length === 0 ? (
                       <div className="text-center py-6 text-xs text-slate-500">
                         No notifications yet.
@@ -248,16 +257,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                 onNavigate('dashboard', { tab: 'overview' });
               }}
               title="Open Profile"
-              className="min-h-[40px] flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+              className="h-9 sm:h-10 flex items-center gap-1.5 px-1.5 sm:px-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer shrink-0"
             >
               <img
                 src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
                 alt={user.username}
                 referrerPolicy="no-referrer"
                 onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR; }}
-                className="w-7 h-7 rounded-lg object-cover border border-orange-500/40 shrink-0"
+                className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg object-cover border border-orange-500/40 shrink-0"
               />
-              <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 hidden sm:inline max-w-[100px] truncate">
+              <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 hidden sm:inline max-w-[90px] truncate">
                 {user.free_fire_ign || user.username}
               </span>
             </button>
@@ -265,7 +274,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             <button
               type="button"
               onClick={() => onOpenAuth('login')}
-              className="min-h-[40px] px-4 py-2 text-xs font-gaming font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-sm transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+              className="h-9 sm:h-10 px-3 sm:px-4 text-xs font-gaming font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-sm transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <UserIcon className="w-3.5 h-3.5 shrink-0" />
               <span>Login</span>
@@ -273,14 +282,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
           )}
 
           {/* Always-Visible 3-Dot Menu (Mobile + Desktop) */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => {
                 setShowMobileMenu(!showMobileMenu);
                 setShowNotifications(false);
               }}
-              className={`min-h-[40px] min-w-[40px] p-2 rounded-xl border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+              className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
                 showMobileMenu
                   ? 'bg-orange-600 text-white border-orange-600'
                   : 'bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200'
@@ -292,7 +301,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             </button>
 
             {showMobileMenu && (
-              <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 space-y-2.5 max-h-[82vh] overflow-y-auto z-50">
+              <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 space-y-3 max-h-[82dvh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] z-50">
                 {user && (
                   <div className="px-2.5 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2.5">
                     <img
@@ -330,7 +339,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                 {user && (
                   <div className="pt-1 lg:pt-0 lg:border-t-0 border-t border-slate-200 dark:border-slate-800 space-y-2">
                     <div className="px-1 pt-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Options
+                      Account Options
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
@@ -367,7 +376,27 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                   </div>
                 )}
 
-                {isStaff && (
+                {/* Policies, Rules & Admin Access (Moved from Footer into 3-Dot Menu) */}
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Policies &amp; Info
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {policyLinks.map(pol => (
+                      <button
+                        key={pol.slug}
+                        type="button"
+                        onClick={() => { setShowMobileMenu(false); onNavigate('page', { slug: pol.slug }); }}
+                        className="text-left px-2.5 py-2 text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span className="truncate">{pol.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {isStaff ? (
                   <button
                     type="button"
                     onClick={() => { setShowMobileMenu(false); onNavigate('admin'); }}
@@ -375,6 +404,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                   >
                     <Shield className="w-4 h-4 shrink-0" />
                     <span>Admin Panel</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setShowMobileMenu(false); onOpenAuth('admin_login'); }}
+                    className="w-full text-left px-3 py-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 rounded-xl font-semibold flex items-center gap-2 cursor-pointer"
+                  >
+                    <Shield className="w-3.5 h-3.5 shrink-0" />
+                    <span>Admin Login</span>
                   </button>
                 )}
 

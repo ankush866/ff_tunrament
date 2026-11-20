@@ -1086,9 +1086,10 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     const id = genId('match');
     try {
       const totalSlots = Number(body.total_slots || 48);
-      const banner = body.banner_image
-        ? await compressImageDataUrl(String(body.banner_image), 960, 0.75)
-        : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800';
+      const rawBanner = String(body.banner_image || '').trim();
+      const banner = rawBanner
+        ? await compressImageDataUrl(rawBanner, 960, 0.75)
+        : '';
       await setDoc(doc(db, 'tournaments', id), {
         id,
         title: sanitizeStr(body.title, 150),
@@ -1123,8 +1124,9 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     try {
       const totalSlots = Number(body.total_slots || 48);
       const availSlots = Math.min(totalSlots, Math.max(0, Number(body.available_slots ?? totalSlots)));
-      const banner = body.banner_image
-        ? await compressImageDataUrl(String(body.banner_image), 960, 0.75)
+      const rawBanner = String(body.banner_image || '').trim();
+      const banner = rawBanner
+        ? await compressImageDataUrl(rawBanner, 960, 0.75)
         : '';
       await updateDoc(doc(db, 'tournaments', tid), {
         title: sanitizeStr(body.title, 150),

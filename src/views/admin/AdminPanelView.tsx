@@ -32,6 +32,7 @@ import {
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime } from '../../lib/api.js';
+import { normalizeImageUrl, DEFAULT_MATCH_BANNER, getSafeImageUrl } from '../../lib/assets.js';
 
 interface AdminPanelViewProps {
   onNavigate: (view: string, params?: any) => void;
@@ -1083,54 +1084,58 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
           )}
 
           {viewingScreenshot && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-              <div className="relative max-w-lg w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center space-y-3">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <span className="font-gaming font-bold text-sm text-slate-900 dark:text-white">
-                    Payment Receipt Screenshot
-                  </span>
-                  <button
-                    onClick={() => setViewingScreenshot(null)}
-                    className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1"
-                  >
-                    ✕
-                  </button>
+            <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/85 backdrop-blur-sm">
+              <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+                <div className="relative max-w-lg w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center space-y-3 my-auto">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <span className="font-gaming font-bold text-sm text-slate-900 dark:text-white">
+                      Payment Receipt Screenshot
+                    </span>
+                    <button
+                      onClick={() => setViewingScreenshot(null)}
+                      className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <img src={viewingScreenshot} alt="Receipt" className="max-h-[70vh] mx-auto rounded-xl object-contain" />
                 </div>
-                <img src={viewingScreenshot} alt="Receipt" className="max-h-[70vh] mx-auto rounded-xl object-contain" />
               </div>
             </div>
           )}
 
           {rejectModalPayment && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-              <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4">
-                <h4 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
-                  REJECT PAYMENT
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Enter reason for declining this UPI payment.
-                </p>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="e.g. UTR not found or wrong amount"
-                  value={rejectionReason}
-                  onChange={e => setRejectionReason(e.target.value)}
-                  className={inputCls}
-                />
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => setRejectModalPayment(null)}
-                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleVerifyPayment(rejectModalPayment.id, 'rejected', rejectionReason)}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs"
-                  >
-                    Confirm Reject
-                  </button>
+            <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
+              <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+                <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 my-auto">
+                  <h4 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
+                    REJECT PAYMENT
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Enter reason for declining this UPI payment.
+                  </p>
+                  <textarea
+                    rows={3}
+                    required
+                    placeholder="e.g. UTR not found or wrong amount"
+                    value={rejectionReason}
+                    onChange={e => setRejectionReason(e.target.value)}
+                    className={inputCls}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setRejectModalPayment(null)}
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleVerifyPayment(rejectModalPayment.id, 'rejected', rejectionReason)}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs"
+                    >
+                      Confirm Reject
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1263,51 +1268,52 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               </div>
 
               {showTournamentModal && editingTournament && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-                  <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 max-h-[88vh] overflow-y-auto">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                      <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
-                        {editingTournament.id ? 'EDIT MATCH' : 'CREATE NEW MATCH'}
-                      </h3>
-                      <button
-                        onClick={() => setShowTournamentModal(false)}
-                        className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
+                  <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+                    <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 my-auto">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                        <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
+                          {editingTournament.id ? 'EDIT MATCH' : 'CREATE NEW MATCH'}
+                        </h3>
+                        <button
+                          onClick={() => setShowTournamentModal(false)}
+                          className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
 
-                    <form
-                      onSubmit={async e => {
-                        e.preventDefault();
-                        try {
-                          if (editingTournament.id) {
-                            await apiRequest(`/admin/tournaments/${editingTournament.id}`, {
-                              method: 'PUT',
-                              body: JSON.stringify({
-                                ...editingTournament,
-                                match_at: new Date(editingTournament.match_at).toISOString()
-                              })
-                            });
-                          } else {
-                            await apiRequest('/admin/tournaments', {
-                              method: 'POST',
-                              body: JSON.stringify({
-                                ...editingTournament,
-                                match_at: new Date(editingTournament.match_at).toISOString()
-                              })
-                            });
+                      <form
+                        onSubmit={async e => {
+                          e.preventDefault();
+                          try {
+                            const normalizedBanner = normalizeImageUrl(editingTournament.banner_image);
+                            const payload = {
+                              ...editingTournament,
+                              banner_image: normalizedBanner,
+                              match_at: new Date(editingTournament.match_at).toISOString()
+                            };
+                            if (editingTournament.id) {
+                              await apiRequest(`/admin/tournaments/${editingTournament.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify(payload)
+                              });
+                            } else {
+                              await apiRequest('/admin/tournaments', {
+                                method: 'POST',
+                                body: JSON.stringify(payload)
+                              });
+                            }
+                            setShowTournamentModal(false);
+                            const refreshed = await apiRequest<{ tournaments: any[] }>('/tournaments');
+                            setTournaments(refreshed.tournaments || []);
+                            window.dispatchEvent(new Event('flaxy_tournaments_updated'));
+                          } catch (err: any) {
+                            alert(err.message);
                           }
-                          setShowTournamentModal(false);
-                          apiRequest<{ tournaments: any[] }>('/tournaments').then(res =>
-                            setTournaments(res.tournaments || [])
-                          );
-                        } catch (err: any) {
-                          alert(err.message);
-                        }
-                      }}
-                      className="space-y-4 text-xs"
-                    >
+                        }}
+                        className="space-y-4 text-xs"
+                      >
                       <div>
                         <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           Match Title *
@@ -1430,7 +1436,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                             className={inputCls}
                           >
                             <option value="Registration Open">Registration Open</option>
-                            <option value="Registration Closed">Registration Closed</option>
                             <option value="Upcoming">Upcoming</option>
                             <option value="Live">Live</option>
                             <option value="Completed">Completed</option>
@@ -1439,16 +1444,53 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Banner Image URL
-                        </label>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                            Banner Image URL or Upload
+                          </label>
+                          <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+                            <Upload className="w-3.5 h-3.5 text-orange-500" />
+                            <span>Upload Photo</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  setEditingTournament({
+                                    ...editingTournament,
+                                    banner_image: reader.result as string
+                                  });
+                                };
+                                reader.readAsDataURL(file);
+                              }}
+                            />
+                          </label>
+                        </div>
                         <input
-                          type="url"
+                          type="text"
+                          placeholder="Paste image link (https://... or Google Drive link)"
                           value={editingTournament.banner_image || ''}
                           onChange={e => setEditingTournament({ ...editingTournament, banner_image: e.target.value })}
                           className={inputCls}
                         />
+                        <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                          <img
+                            src={getSafeImageUrl(editingTournament.banner_image, DEFAULT_MATCH_BANNER)}
+                            alt="Match banner preview"
+                            className="w-20 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                            onError={e => {
+                              (e.currentTarget as HTMLImageElement).src = DEFAULT_MATCH_BANNER;
+                            }}
+                          />
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Live Banner Preview — supports direct image URLs, Google Drive share links, or uploaded photos.
+                          </span>
+                        </div>
                       </div>
 
                       <div>
@@ -1472,7 +1514,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     </form>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
             </div>
           )}
 
@@ -2213,8 +2256,9 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               </div>
 
               {showPageModal && editingPage && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-                  <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
+                  <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+                    <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 my-auto">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                       <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
                         {editingPage.id ? `EDIT: ${editingPage.title}` : 'NEW PAGE'}
@@ -2304,11 +2348,13 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     </form>
                   </div>
                 </div>
+              </div>
               )}
 
               {showVersionsDrawer && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-                  <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
+                  <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+                    <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 my-auto">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                       <h4 className="font-gaming font-bold text-base text-slate-900 dark:text-white">
                         VERSION HISTORY
@@ -2342,6 +2388,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     </div>
                   </div>
                 </div>
+              </div>
               )}
             </div>
           )}

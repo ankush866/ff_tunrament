@@ -114,8 +114,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden p-5 sm:p-6 max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 dark:bg-black/80 backdrop-blur-sm touch-pan-y [-webkit-overflow-scrolling:touch]">
+      <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+        <div className="relative w-full max-w-md my-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden p-5 sm:p-6 flex flex-col">
         <button
           type="button"
           onClick={onClose}
@@ -194,7 +195,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        <div className="overflow-y-auto flex-1 pr-0.5">
+        <div className="space-y-1">
           {mode === 'login' && (
             <div className="space-y-4 py-2">
               <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
@@ -304,6 +305,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

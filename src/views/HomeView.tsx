@@ -41,21 +41,27 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAuth }) =>
   });
 
   useEffect(() => {
-    apiRequest<{ tournaments: any[] }>('/tournaments')
-      .then(res => setTournaments(res.tournaments || []))
-      .catch(() => {});
+    const loadHomeData = () => {
+      apiRequest<{ tournaments: any[] }>('/tournaments')
+        .then(res => setTournaments(res.tournaments || []))
+        .catch(() => {});
 
-    apiRequest<{
-      registeredWarriors: number;
-      tournamentsCompleted: number;
-      activeMatches: number;
-      verifiedPayouts: number;
-      activePrizePool: number;
-    }>('/stats/public')
-      .then(res => {
-        if (res) setLiveStats(res);
-      })
-      .catch(() => {});
+      apiRequest<{
+        registeredWarriors: number;
+        tournamentsCompleted: number;
+        activeMatches: number;
+        verifiedPayouts: number;
+        activePrizePool: number;
+      }>('/stats/public')
+        .then(res => {
+          if (res) setLiveStats(res);
+        })
+        .catch(() => {});
+    };
+
+    loadHomeData();
+    window.addEventListener('flaxy_tournaments_updated', loadHomeData);
+    return () => window.removeEventListener('flaxy_tournaments_updated', loadHomeData);
   }, []);
 
   useEffect(() => {

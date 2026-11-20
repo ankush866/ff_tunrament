@@ -88,12 +88,17 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
 
   useEffect(() => {
     fetchTournamentData();
+    const handleRefresh = () => fetchTournamentData();
+    window.addEventListener('flaxy_tournaments_updated', handleRefresh);
     const interval = setInterval(() => {
       apiRequest<any>(`/rooms/${tournamentId}`)
         .then(res => setRoom(res))
         .catch(() => {});
     }, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('flaxy_tournaments_updated', handleRefresh);
+    };
   }, [tournamentId, user]);
 
   useEffect(() => {
@@ -756,8 +761,9 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
 
       {/* JOIN & UPI PAYMENT MODAL */}
       {showJoinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/70 backdrop-blur-sm touch-pan-y [-webkit-overflow-scrolling:touch]">
+          <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+            <div className="relative w-full max-w-lg my-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-orange-500" />
@@ -939,6 +945,7 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}

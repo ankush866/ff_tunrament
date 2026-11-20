@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Flame, Shield, HelpCircle, Send, Phone, Mail, Award } from 'lucide-react';
+import { HelpCircle, Send, Phone, Mail } from 'lucide-react';
 import { apiRequest } from '../lib/api.js';
 
 interface FooterProps {
   onNavigate: (view: string, params?: any) => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+export const Footer: React.FC<FooterProps> = () => {
   const [settings, setSettings] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(localStorage.getItem('flaxy_site_settings') || '{}');
@@ -14,7 +14,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
       return {};
     }
   });
-  const [footerNav, setFooterNav] = useState<any[]>([]);
 
   useEffect(() => {
     const loadSettings = () => {
@@ -32,159 +31,45 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 
     loadSettings();
     window.addEventListener('flaxy_settings_updated', loadSettings);
-
-    apiRequest<{ items: any[] }>('/cms/navigation')
-      .then(res => {
-        const footers = (res.items || []).filter(item => item.is_footer && item.is_visible);
-        setFooterNav(footers);
-      })
-      .catch(() => {});
-
     return () => {
       window.removeEventListener('flaxy_settings_updated', loadSettings);
     };
   }, []);
 
-  const handleNav = (url: string) => {
-    if (url.startsWith('/page/')) {
-      const slug = url.replace('/page/', '');
-      onNavigate('page', { slug });
-    } else if (url === '/tournaments') {
-      onNavigate('tournaments');
-    } else if (url === '/leaderboard') {
-      onNavigate('leaderboard');
-    } else if (url === '/faq') {
-      onNavigate('faq');
-    } else {
-      onNavigate('home');
-    }
-  };
-
   return (
     <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-sm transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-8">
-          {/* Brand Info */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white shadow-sm">
-                <Flame className="w-4.5 h-4.5" />
-              </div>
-              <span className="font-gaming font-bold text-lg text-slate-900 dark:text-white tracking-wide">
-                {settings.site_name || 'FLAXY ESPORTS'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              {settings.site_tagline || 'Competitive Free Fire tournament portal with live room scheduling and UPI payouts.'}
-            </p>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h4 className="font-gaming font-bold text-slate-900 dark:text-slate-200 text-xs uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5 text-orange-500" />
-              Quick Links
-            </h4>
-            <ul className="space-y-2 text-xs">
-              <li>
-                <button type="button" onClick={() => onNavigate('tournaments')} className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
-                  Active Matches
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={() => onNavigate('live-rooms')} className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
-                  Live Room IDs
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={() => onNavigate('leaderboard')} className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
-                  Leaderboard
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={() => onNavigate('faq')} className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
-                  FAQ & Guide
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={() => onNavigate('admin')} className="text-amber-600 dark:text-amber-400 font-semibold hover:underline transition-colors flex items-center gap-1">
-                  <Shield className="w-3 h-3" />
-                  <span>Admin Login</span>
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* Policies */}
-          <div>
-            <h4 className="font-gaming font-bold text-slate-900 dark:text-slate-200 text-xs uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-emerald-500" />
-              Policies & Rules
-            </h4>
-            <ul className="space-y-2 text-xs">
-              {footerNav.length > 0 ? (
-                footerNav.slice(0, 4).map((item, idx) => (
-                  <li key={idx}>
-                    <button type="button" onClick={() => handleNav(item.url)} className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
-                      {item.label}
-                    </button>
-                  </li>
-                ))
-              ) : (
-                <>
-                  <li><button type="button" onClick={() => onNavigate('page', { slug: 'privacy-policy' })} className="hover:text-orange-600 dark:hover:text-orange-400">Privacy Policy</button></li>
-                  <li><button type="button" onClick={() => onNavigate('page', { slug: 'terms-and-conditions' })} className="hover:text-orange-600 dark:hover:text-orange-400">Terms & Conditions</button></li>
-                  <li><button type="button" onClick={() => onNavigate('page', { slug: 'refund-policy' })} className="hover:text-orange-600 dark:hover:text-orange-400">Refund Policy</button></li>
-                  <li><button type="button" onClick={() => onNavigate('page', { slug: 'tournament-rules' })} className="hover:text-orange-600 dark:hover:text-orange-400">Tournament Rules</button></li>
-                </>
-              )}
-            </ul>
-          </div>
-
-          {/* Support & UPI */}
-          <div>
-            <h4 className="font-gaming font-bold text-slate-900 dark:text-slate-200 text-xs uppercase tracking-wider mb-3 flex items-center gap-1.5">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-5">
+        {/* Support Desk + Social Channels Only */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          {/* Support Info */}
+          <div className="space-y-2">
+            <h4 className="font-gaming font-bold text-slate-900 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
               <HelpCircle className="w-3.5 h-3.5 text-cyan-500" />
-              Support Desk
+              <span>Support</span>
             </h4>
-            <ul className="space-y-2 text-xs">
-              <li className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+              <span className="flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="truncate">{settings.support_email || 'support@flaxy.gg'}</span>
-              </li>
-              <li className="flex items-center gap-2">
+                <span>{settings.support_email || 'support@flaxy.gg'}</span>
+              </span>
+              <span className="flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span>{settings.contact_phone || '+91 98765 43210'}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Send className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <a
-                  href={settings.whatsapp_url || 'https://wa.me/919876543210'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
-                >
-                  WhatsApp Support
-                </a>
-              </li>
-            </ul>
-            <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-slate-800">
-              <div className="text-[11px] text-slate-500">Official UPI ID:</div>
-              <div className="font-mono text-xs font-semibold text-orange-600 dark:text-orange-400 truncate">
-                {settings.upi_id || 'flaxy.esports@icici'}
-              </div>
+              </span>
+              <a
+                href={settings.whatsapp_url || 'https://wa.me/919876543210'}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+              >
+                <Send className="w-3.5 h-3.5 shrink-0" />
+                <span>WhatsApp Support</span>
+              </a>
             </div>
           </div>
-        </div>
 
-        {/* Bottom Copyright & Official Social Channels */}
-        <div className="pt-6 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-center md:text-left leading-relaxed max-w-xl">
-            {settings.footer_text || '© 2026 FLAXY ESPORTS. All rights reserved. Free Fire is a registered trademark of Garena.'}
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {/* YouTube */}
+          {/* Official Social Channels: YouTube, Instagram, Discord, Telegram */}
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href={(() => {
                 const val = settings.social_youtube || 'https://youtube.com/@flaxyesports';
@@ -202,7 +87,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <span>YouTube</span>
             </a>
 
-            {/* Instagram */}
             <a
               href={(() => {
                 const val = settings.social_instagram || 'https://instagram.com/flaxy_esports';
@@ -221,7 +105,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <span>Instagram</span>
             </a>
 
-            {/* Discord */}
             <a
               href={(() => {
                 const val = settings.social_discord || 'https://discord.gg/flaxy';
@@ -238,7 +121,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <span>Discord</span>
             </a>
 
-            {/* Telegram */}
             <a
               href={(() => {
                 const val = settings.social_telegram || 'https://t.me/flaxyesports';
@@ -255,6 +137,10 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <span>Telegram</span>
             </a>
           </div>
+        </div>
+
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 text-center md:text-left">
+          {settings.footer_text || '© 2026 FLAXY ESPORTS. All rights reserved.'}
         </div>
       </div>
     </footer>
