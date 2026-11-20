@@ -1,19 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  User as UserIcon,
   Trophy,
-  Users,
-  Wallet,
-  Bell,
-  HelpCircle,
-  Settings,
   Shield,
   Clock,
   CheckCircle2,
   AlertCircle,
   Send,
   Plus,
-  Swords,
   Camera,
   Upload,
   ExternalLink
@@ -244,113 +237,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
     );
   }
 
-  const isStaff = ['super_admin', 'tournament_manager', 'payment_manager', 'content_manager', 'support_manager'].includes(user.role);
-
-  const tabs = [
-    { id: 'overview', label: 'Profile', icon: UserIcon },
-    { id: 'payments', label: 'Wallet', icon: Wallet, count: payments.length },
-    { id: 'tournaments', label: 'Joined', icon: Trophy, count: myTournaments.length },
-    { id: 'matches', label: 'History', icon: Swords, count: myMatches.length },
-    { id: 'teams', label: 'Teams', icon: Users, count: teams.length },
-    { id: 'notifications', label: 'Alerts', icon: Bell, count: unreadCount },
-    { id: 'support', label: 'Support', icon: HelpCircle, count: tickets.length },
-    { id: 'settings', label: 'Settings', icon: Settings }
-  ];
-
   const inputClass =
     'w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:border-orange-500 focus:outline-none';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 pb-20">
-      {/* Compact Profile Strip */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('settings')}
-            className="relative group shrink-0 cursor-pointer"
-            title="Change profile photo"
-          >
-            <img
-              src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
-              alt={user.username}
-              referrerPolicy="no-referrer"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR; }}
-              className="w-14 h-14 rounded-2xl object-cover border-2 border-orange-500/50"
-            />
-            <span className="absolute -bottom-1 -right-1 p-1 bg-orange-600 rounded-lg text-white shadow">
-              <Camera className="w-3 h-3" />
-            </span>
-          </button>
-          <div className="min-w-0">
-            <h2 className="font-gaming font-bold text-lg sm:text-xl text-slate-900 dark:text-white truncate">
-              {user.free_fire_ign || user.username}
-            </h2>
-            <div className="text-xs text-slate-600 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
-              <span className="font-mono">UID: {user.free_fire_uid || 'Not set'}</span>
-              <span>·</span>
-              <span className="truncate">{user.email}</span>
-            </div>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 pb-20">
+      {/* Clean Profile Strip */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-3.5 min-w-0">
+        <button
+          type="button"
+          onClick={() => setActiveTab('settings')}
+          className="relative group shrink-0 cursor-pointer"
+          title="Change profile photo"
+        >
+          <img
+            src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
+            alt={user.username}
+            referrerPolicy="no-referrer"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR; }}
+            className="w-14 h-14 rounded-2xl object-cover border-2 border-orange-500/50"
+          />
+          <span className="absolute -bottom-1 -right-1 p-1 bg-orange-600 rounded-lg text-white shadow">
+            <Camera className="w-3 h-3" />
+          </span>
+        </button>
+        <div className="min-w-0">
+          <h2 className="font-gaming font-bold text-lg sm:text-xl text-slate-900 dark:text-white truncate">
+            {user.free_fire_ign || user.username}
+          </h2>
+          <div className="text-xs text-slate-600 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
+            <span>@{user.username}</span>
+            <span>·</span>
+            <span className="font-mono">UID: {user.free_fire_uid || 'Not set'}</span>
+            <span>·</span>
+            <span className="truncate">{user.email}</span>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {isStaff && (
-            <button
-              type="button"
-              onClick={() => onNavigate('admin')}
-              className="min-h-[38px] px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-gaming font-bold text-xs rounded-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-            >
-              <Shield className="w-4 h-4" />
-              <span>Admin Panel</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onNavigate('tournaments')}
-            className="min-h-[38px] px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white font-gaming font-bold text-xs rounded-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-          >
-            <Trophy className="w-4 h-4" />
-            <span>Matches</span>
-          </button>
         </div>
       </div>
 
-      {/* Responsive Tab Switcher: Scrollable Pills on Mobile, Sidebar on Desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-3 flex lg:flex-col gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-          {tabs.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => { setActiveTab(tab.id); setSelectedTicket(null); }}
-                className={`min-h-[40px] px-3.5 py-2.5 rounded-xl text-xs font-gaming font-bold flex items-center justify-between gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  isActive
-                    ? 'bg-orange-600 text-white shadow-sm'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span>{tab.label}</span>
-                </span>
-                {tab.count !== undefined && tab.count > 0 && (
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums ${
-                    isActive ? 'bg-black/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400'
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Main Content */}
-        <div className="lg:col-span-9">
+      {/* Main Content */}
+      <div className="space-y-6">
           {/* PROFILE OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-4">
@@ -390,27 +316,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
                   </button>
                 </div>
               )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('payments')}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-orange-500 text-left space-y-1 cursor-pointer"
-                >
-                  <Wallet className="w-5 h-5 text-emerald-500" />
-                  <div className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Wallet &amp; UPI</div>
-                  <div className="text-xs text-slate-500">View payments &amp; winnings</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('settings')}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-orange-500 text-left space-y-1 cursor-pointer"
-                >
-                  <Camera className="w-5 h-5 text-orange-500" />
-                  <div className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Edit Profile &amp; Photo</div>
-                  <div className="text-xs text-slate-500">Update photo, UID &amp; password</div>
-                </button>
-              </div>
             </div>
           )}
 
@@ -871,7 +776,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   );
