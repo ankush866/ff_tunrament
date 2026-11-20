@@ -101,11 +101,18 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   const [newFaqA, setNewFaqA] = useState('');
   const [newFaqCat, setNewFaqCat] = useState('General');
 
-  // Announcements
+  // Announcements & Broadcast Notifications
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [newAnnTitle, setNewAnnTitle] = useState('');
   const [newAnnContent, setNewAnnContent] = useState('');
   const [newAnnType, setNewAnnType] = useState('info');
+  const [annNotifyAll, setAnnNotifyAll] = useState(true);
+
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifMessage, setNotifMessage] = useState('');
+  const [notifType, setNotifType] = useState('system');
+  const [notifSending, setNotifSending] = useState(false);
+  const [notifStatusMsg, setNotifStatusMsg] = useState<string | null>(null);
 
   // Media Library
   const [mediaItems, setMediaItems] = useState<any[]>([]);
@@ -736,6 +743,18 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                   >
                     <FileText className="w-4 h-4 text-cyan-500" />
                     <span>Policy Pages & CMS</span>
+                  </button>
+                )}
+                {(canContent || canSupport || isSuperAdmin) && (
+                  <button
+                    onClick={() => {
+                      setMoreSubTab('faqs_alerts');
+                      setPrimaryTab('more');
+                    }}
+                    className="px-3.5 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-500/30 font-semibold text-xs rounded-xl flex items-center gap-1.5"
+                  >
+                    <Bell className="w-4 h-4" />
+                    <span>Send Notification to All Users</span>
                   </button>
                 )}
               </div>
@@ -1763,7 +1782,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               },
               { id: 'cms' as MoreSubTab, label: 'CMS Pages', icon: FileText, show: canContent },
               { id: 'menus_home' as MoreSubTab, label: 'Menus & Home', icon: Menu, show: canContent },
-              { id: 'faqs_alerts' as MoreSubTab, label: 'FAQs & Alerts', icon: Bell, show: canContent },
+              { id: 'faqs_alerts' as MoreSubTab, label: 'Notifications & FAQs', icon: Bell, show: canContent || canSupport || isSuperAdmin },
               { id: 'media_logs' as MoreSubTab, label: 'Media & Logs', icon: ImageIcon, show: canContent || isSuperAdmin }
             ]
               .filter(s => s.show)
@@ -2515,8 +2534,86 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                 </div>
               </div>
 
-              {/* Announcements */}
-              <div className={`${cardCls} p-5 space-y-3`}>
+              {/* Broadcast Notification to All Users + Announcements */}
+              <div className={`${cardCls} p-5 space-y-5`}>
+                {/* Direct Push / Bell Notification Sender */}
+                <div className="space-y-2.5 pb-4 border-b border-slate-200 dark:border-slate-800">
+                  <h3 className="font-gaming font-bold text-base text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Send className="w-4 h-4 text-orange-500" />
+                    <span>SEND NOTIFICATION TO ALL USERS</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Notification sent here appears instantly in the top Notification Bell for every registered player.
+                  </p>
+                  {notifStatusMsg && (
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-semibold">
+                      {notifStatusMsg}
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    maxLength={160}
+                    placeholder="Notification Title (e.g. New Room ID Live!)"
+                    value={notifTitle}
+                    onChange={e => setNotifTitle(e.target.value)}
+                    className={inputCls}
+                  />
+                  <textarea
+                    rows={2}
+                    maxLength={1000}
+                    placeholder="Notification Message for all players..."
+                    value={notifMessage}
+                    onChange={e => setNotifMessage(e.target.value)}
+                    className={inputCls}
+                  />
+                  <select
+                    value={notifType}
+                    onChange={e => setNotifType(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="system">System Alert</option>
+                    <option value="tournament">Match / Tournament Update</option>
+                    <option value="payment">Payment / Payout Update</option>
+                  </select>
+                  <button
+                    type="button"
+                    disabled={notifSending}
+                    onClick={async () => {
+                      if (!notifTitle.trim() || !notifMessage.trim()) {
+                        alert('Please enter both Title and Message.');
+                        return;
+                      }
+                      setNotifSending(true);
+                      setNotifStatusMsg(null);
+                      try {
+                        const res = await apiRequest<{ success: boolean; sentCount: number }>(
+                          '/admin/notifications/broadcast',
+                          {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              title: notifTitle.trim(),
+                              message: notifMessage.trim(),
+                              type: notifType
+                            })
+                          }
+                        );
+                        setNotifTitle('');
+                        setNotifMessage('');
+                        setNotifStatusMsg(`Notification delivered to ${res.sentCount} users!`);
+                        setTimeout(() => setNotifStatusMsg(null), 5000);
+                      } catch (err: any) {
+                        alert(err.message || 'Failed to send notification.');
+                      } finally {
+                        setNotifSending(false);
+                      }
+                    }}
+                    className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-gaming font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{notifSending ? 'Sending...' : 'Send Notification to All Users'}</span>
+                  </button>
+                </div>
+
                 <h3 className="font-gaming font-bold text-base text-slate-900 dark:text-white flex items-center gap-1.5">
                   <Bell className="w-4 h-4 text-orange-500" />
                   <span>ANNOUNCEMENT BANNERS</span>
@@ -2545,6 +2642,15 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     <option value="warning">Warning</option>
                     <option value="success">Success</option>
                   </select>
+                  <label className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={annNotifyAll}
+                      onChange={e => setAnnNotifyAll(e.target.checked)}
+                      className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span>Also send bell notification to all users</span>
+                  </label>
                   <button
                     type="button"
                     onClick={async () => {
@@ -2555,7 +2661,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                           title: newAnnTitle,
                           content: newAnnContent,
                           banner_type: newAnnType,
-                          is_banner_visible: 1
+                          is_banner_visible: 1,
+                          notify_all: annNotifyAll
                         })
                       });
                       setNewAnnTitle('');

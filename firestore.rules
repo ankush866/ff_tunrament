@@ -515,8 +515,8 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          (isSuperAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'is_blocked', 'is_deactivated', 'full_name', 'free_fire_uid', 'free_fire_ign', 'avatar_url', 'updatedAt']))
-          || (isOwner(userId) && !isBlockedUser() && incoming().role == existing().role && incoming().is_blocked == existing().is_blocked && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'free_fire_uid', 'free_fire_ign', 'avatar_url', 'is_deactivated', 'updatedAt']))
+          (isSuperAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'is_blocked', 'is_deactivated', 'username', 'full_name', 'free_fire_uid', 'free_fire_ign', 'avatar_url', 'updatedAt']))
+          || (isOwner(userId) && !isBlockedUser() && incoming().role == existing().role && incoming().is_blocked == existing().is_blocked && incoming().diff(existing()).affectedKeys().hasOnly(['username', 'full_name', 'free_fire_uid', 'free_fire_ign', 'avatar_url', 'is_deactivated', 'updatedAt']))
         );
       allow delete: if false;
 

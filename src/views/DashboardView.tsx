@@ -16,7 +16,8 @@ import {
   Swords,
   Camera,
   Upload,
-  ExternalLink
+  ExternalLink,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime } from '../lib/api.js';
@@ -28,7 +29,7 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'overview', onNavigate }) => {
-  const { user, updateProfile, notifications, unreadCount, markNotificationRead, markAllNotificationsRead } = useAuth();
+  const { user, logout, updateProfile, notifications, unreadCount, markNotificationRead, markAllNotificationsRead } = useAuth();
   const [activeTab, setActiveTab] = useState(initialTab);
 
   const [myTournaments, setMyTournaments] = useState<any[]>([]);
@@ -312,6 +313,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
           >
             <Trophy className="w-4 h-4" />
             <span>Matches</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="min-h-[38px] px-3.5 py-2 bg-red-500/10 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white border border-red-500/30 font-gaming font-bold text-xs rounded-xl flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
           </button>
         </div>
       </div>

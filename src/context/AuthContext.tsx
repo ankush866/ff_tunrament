@@ -150,9 +150,15 @@ async function resolveOrCreateUserProfile(
     }
 
     userSnap = await getDoc(userRef);
-  } else if (extra && (extra.free_fire_uid || extra.free_fire_ign || extra.full_name || extra.phone)) {
+  } else if (extra && (extra.username || extra.free_fire_uid || extra.free_fire_ign || extra.full_name || extra.phone)) {
     const cur = userSnap.data();
     const pubUpdates: Record<string, any> = { updatedAt: serverTimestamp() };
+    const cleanExtraUsername = extra.username
+      ? extra.username.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 48)
+      : '';
+    if (cleanExtraUsername.length >= 2 && cleanExtraUsername !== cur.username) {
+      pubUpdates.username = cleanExtraUsername;
+    }
     if (extra.full_name && !cur.full_name) pubUpdates.full_name = extra.full_name.slice(0, 100);
     if (extra.free_fire_uid && !cur.free_fire_uid) pubUpdates.free_fire_uid = extra.free_fire_uid.slice(0, 32);
     if (extra.free_fire_ign && !cur.free_fire_ign) pubUpdates.free_fire_ign = extra.free_fire_ign.slice(0, 64);

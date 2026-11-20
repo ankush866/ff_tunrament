@@ -206,25 +206,31 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
   // ---------------------------------------------------------
   if (path === '/stats/public' && method === 'GET') {
     try {
-      const snap = await getDocs(query(collection(db, 'tournaments'), where('is_published', '==', 1)));
-      const list = snap.empty ? DEFAULT_TOURNAMENTS : snap.docs.map(serializeDoc);
+      const [tSnap, regSnap, resSnap] = await Promise.all([
+        getDocs(query(collection(db, 'tournaments'), where('is_published', '==', 1))),
+        getDocs(query(collection(db, 'registrations'), where('payment_status', 'in', ['approved', 'pending']))),
+        getDocs(query(collection(db, 'results'), where('rank', '>=', 1)))
+      ]);
+      const list = tSnap.empty ? DEFAULT_TOURNAMENTS : tSnap.docs.map(serializeDoc);
       const active = list.filter((t) => t.status === 'Registration Open' || t.status === 'Live');
       const completed = list.filter((t) => t.status === 'Completed');
       const activePrizePool = active.reduce((sum, t) => sum + Number(t.prize_pool || 0), 0);
+      const verifiedPayouts = resSnap.docs.reduce((sum, d) => sum + Number(d.data().prize_amount || 0), 0);
+      const uniquePlayers = new Set(regSnap.docs.map((d) => String(d.data().user_id || d.id))).size;
       return {
-        registeredWarriors: Math.max(120, list.reduce((acc, t) => acc + Math.max(0, Number(t.total_slots || 0) - Number(t.available_slots || 0)), 0)),
+        registeredWarriors: uniquePlayers,
         tournamentsCompleted: completed.length,
         activeMatches: active.length,
-        verifiedPayouts: completed.reduce((sum, t) => sum + Number(t.prize_pool || 0), 0),
+        verifiedPayouts,
         activePrizePool
       } as T;
     } catch {
       return {
-        registeredWarriors: 120,
-        tournamentsCompleted: 1,
-        activeMatches: 2,
-        verifiedPayouts: 10000,
-        activePrizePool: 8500
+        registeredWarriors: 0,
+        tournamentsCompleted: 0,
+        activeMatches: 0,
+        verifiedPayouts: 0,
+        activePrizePool: 0
       } as T;
     }
   }
@@ -1558,19 +1564,100 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     }
   }
 
+  if (path === '/admin/notifications/broadcast' && method === 'POST') {
+    const actorUid = requireAuthUid();
+    const role = await getCurrentRole();
+    if (!isStaffRole(role)) throw new Error('Admin permission required to send notifications.');
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const recipientIds = new Set<string>();
+      usersSnap.docs.forEach((d) => {
+        if (!d.data().is_deactivated) {
+          recipientIds.add(d.id);
+        }
+      });
+      recipientIds.add(actorUid);
+
+      const title = sanitizeStr(body.title || 'Admin Announcement', 160);
+      const message = sanitizeStr(body.message || '', 1000);
+      if (!title || !message) throw new Error('Title and message are required.');
+      const notifType = sanitizeStr(body.type || 'system', 32);
+      const linkUrl = sanitizeStr(body.link_url || '/tournaments', 300);
+
+      const ids = Array.from(recipientIds);
+      for (let i = 0; i < ids.length; i += 450) {
+        const chunk = ids.slice(i, i + 450);
+        const batch = writeBatch(db);
+        for (const uid of chunk) {
+          const nid = genId('notif');
+          batch.set(doc(db, 'notifications', nid), {
+            id: nid,
+            user_id: uid,
+            title,
+            message,
+            type: notifType,
+            is_read: 0,
+            link_url: linkUrl,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+        await batch.commit();
+      }
+
+      await logAdminAction('SEND_NOTIFICATION', `Broadcasted notification "${title}" to ${ids.length} users`);
+      return { success: true, sentCount: ids.length } as T;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'notifications');
+    }
+  }
+
   if (path === '/admin/announcements' && method === 'POST') {
+    const actorUid = requireAuthUid();
     const id = genId('ann');
     try {
+      const title = sanitizeStr(body.title || '', 200);
+      const content = sanitizeStr(body.content || '', 1000);
       await setDoc(doc(db, 'announcements', id), {
         id,
-        title: sanitizeStr(body.title || '', 200),
-        content: sanitizeStr(body.content || '', 1000),
+        title,
+        content,
         banner_type: body.banner_type || 'info',
         is_banner_visible: Number(body.is_banner_visible ?? 1),
         is_published: 1,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+
+      if (body.notify_all) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const recipientIds = new Set<string>();
+        usersSnap.docs.forEach((d) => {
+          if (!d.data().is_deactivated) recipientIds.add(d.id);
+        });
+        recipientIds.add(actorUid);
+        const ids = Array.from(recipientIds);
+        for (let i = 0; i < ids.length; i += 450) {
+          const chunk = ids.slice(i, i + 450);
+          const batch = writeBatch(db);
+          for (const uid of chunk) {
+            const nid = genId('notif');
+            batch.set(doc(db, 'notifications', nid), {
+              id: nid,
+              user_id: uid,
+              title: sanitizeStr(title || 'Announcement', 160),
+              message: sanitizeStr(content || '', 1000),
+              type: 'system',
+              is_read: 0,
+              link_url: '/tournaments',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+          }
+          await batch.commit();
+        }
+      }
+
       return { success: true, id } as T;
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `announcements/${id}`);

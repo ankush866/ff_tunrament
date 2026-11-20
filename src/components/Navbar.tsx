@@ -179,34 +179,50 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                   setShowUserMenu(false);
                 }}
                 aria-label="Notifications"
-                className="min-h-[40px] min-w-[40px] p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 relative flex items-center justify-center cursor-pointer"
+                title="Notifications"
+                className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl border flex items-center gap-1.5 relative transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  unreadCount > 0
+                    ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400'
+                    : 'bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200'
+                }`}
               >
-                <Bell className="w-4.5 h-4.5" />
+                <Bell className="w-4 h-4 shrink-0" />
+                <span className="hidden md:inline text-xs font-semibold">Alerts</span>
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-orange-600 text-[10px] font-bold text-white rounded-full flex items-center justify-center tabular-nums">
+                  <span className="px-1.5 min-w-[18px] h-[18px] bg-orange-600 text-[10px] font-bold text-white rounded-full flex items-center justify-center tabular-nums">
                     {unreadCount}
                   </span>
                 )}
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-4 z-50">
+                <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 z-50">
                   <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800">
                     <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                       <Bell className="w-4 h-4 text-orange-500" />
                       Notifications
                     </span>
-                    {unreadCount > 0 && (
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsRead}
+                          className="text-xs text-orange-600 dark:text-orange-400 font-semibold hover:underline cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={markAllNotificationsRead}
-                        className="text-xs text-orange-600 dark:text-orange-400 font-semibold hover:underline"
+                        onClick={() => setShowNotifications(false)}
+                        aria-label="Close notifications"
+                        className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg cursor-pointer"
                       >
-                        Mark all read
+                        <X className="w-4 h-4" />
                       </button>
-                    )}
+                    </div>
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/70 mt-2 space-y-1">
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/70 mt-2 space-y-1">
                     {notifications.length === 0 ? (
                       <div className="text-center py-6 text-xs text-slate-500">
                         No notifications yet.
@@ -220,12 +236,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                           }}
                           className={`p-2.5 rounded-xl text-xs cursor-pointer transition-colors ${
                             item.is_read
-                              ? 'opacity-70 hover:opacity-100'
-                              : 'bg-orange-50 dark:bg-orange-500/10'
+                              ? 'opacity-75 hover:opacity-100'
+                              : 'bg-orange-50 dark:bg-orange-500/10 border border-orange-500/20'
                           }`}
                         >
                           <div className="font-semibold text-slate-900 dark:text-slate-100">{item.title}</div>
-                          <div className="text-slate-600 dark:text-slate-400 mt-0.5">{item.message}</div>
+                          <div className="text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">{item.message}</div>
                           <div className="text-[10px] text-slate-500 mt-1">{formatISTDateTime(item.created_at)}</div>
                         </div>
                       ))
@@ -236,17 +252,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             </div>
           )}
 
-          {/* User Dropdown or Login CTA */}
+          {/* User Dropdown & Direct Logout or Login CTA */}
           {user ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUserMenu(!showUserMenu);
-                  setShowNotifications(false);
-                }}
-                className="min-h-[40px] flex items-center gap-2 px-1.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
-              >
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserMenu(!showUserMenu);
+                    setShowNotifications(false);
+                  }}
+                  className="min-h-[40px] flex items-center gap-2 px-1.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+                >
                 <img
                   src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
                   alt={user.username}
@@ -334,6 +351,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                   </button>
                 </div>
               )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => logout()}
+                aria-label="Logout"
+                title="Logout"
+                className="min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white border border-red-500/25 text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
             </div>
           ) : (
             <button

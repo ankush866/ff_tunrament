@@ -28,6 +28,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [regUsername, setRegUsername] = useState('');
   const [regFfUid, setRegFfUid] = useState('');
   const [regFfIgn, setRegFfIgn] = useState('');
   const [regPhone, setRegPhone] = useState('');
@@ -43,11 +44,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handlePlayerGoogleAuth = async (withProfileDetails: boolean) => {
     setError(null);
+    if (withProfileDetails) {
+      const cleanUsername = regUsername.trim().replace(/[^a-zA-Z0-9_]/g, '_');
+      if (cleanUsername.length < 2) {
+        setError('Please enter a Username (minimum 2 letters or numbers) to identify your profile.');
+        return;
+      }
+    }
     setLoading(true);
     try {
+      const cleanUsername = regUsername.trim().replace(/[^a-zA-Z0-9_]/g, '_');
       await signInWithGoogle(
         withProfileDetails
           ? {
+              username: cleanUsername,
               free_fire_uid: regFfUid.trim(),
               free_fire_ign: regFfIgn.trim(),
               phone: regPhone.trim()
@@ -210,6 +220,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               }}
               className="space-y-3"
             >
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Username (Your Unique ID) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  minLength={2}
+                  maxLength={32}
+                  placeholder="e.g. flaxy_king"
+                  value={regUsername}
+                  onChange={e => setRegUsername(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">

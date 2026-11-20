@@ -43,7 +43,7 @@ export const DEFAULT_TOURNAMENTS = [
     entry_fee: 50,
     prize_pool: 3500,
     total_slots: 48,
-    available_slots: 46,
+    available_slots: 48,
     reg_open_at: nowPlusHours(-12),
     reg_close_at: nowPlusHours(4),
     match_at: nowPlusHours(5),
