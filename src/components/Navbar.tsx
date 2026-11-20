@@ -252,18 +252,17 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
             </div>
           )}
 
-          {/* User Dropdown & Direct Logout or Login CTA */}
+          {/* User Dropdown or Login CTA */}
           {user ? (
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUserMenu(!showUserMenu);
-                    setShowNotifications(false);
-                  }}
-                  className="min-h-[40px] flex items-center gap-2 px-1.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
-                >
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUserMenu(!showUserMenu);
+                  setShowNotifications(false);
+                }}
+                className="min-h-[40px] flex items-center gap-2 px-1.5 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+              >
                 <img
                   src={getSafeImageUrl(user.avatar_url, DEFAULT_PLAYER_AVATAR)}
                   alt={user.username}
@@ -351,18 +350,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
                   </button>
                 </div>
               )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => logout()}
-                aria-label="Logout"
-                title="Logout"
-                className="min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white border border-red-500/25 text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <LogOut className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
             </div>
           ) : (
             <button

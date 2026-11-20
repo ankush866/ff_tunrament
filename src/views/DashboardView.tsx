@@ -314,14 +314,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
             <Trophy className="w-4 h-4" />
             <span>Matches</span>
           </button>
-          <button
-            type="button"
-            onClick={() => logout()}
-            className="min-h-[38px] px-3.5 py-2 bg-red-500/10 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white border border-red-500/30 font-gaming font-bold text-xs rounded-xl flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Logout</span>
-          </button>
         </div>
       </div>
 
@@ -356,6 +348,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="min-h-[40px] px-3.5 py-2.5 rounded-xl text-xs font-gaming font-bold flex items-center justify-between gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer bg-red-500/10 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white border border-red-500/30"
+          >
+            <span className="flex items-center gap-2">
+              <LogOut className="w-4 h-4 shrink-0" />
+              <span>Logout</span>
+            </span>
+          </button>
         </div>
 
         {/* Main Content */}
