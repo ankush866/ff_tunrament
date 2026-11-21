@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime, formatISTTime, getTimeRemaining } from '../lib/api.js';
 import { DEFAULT_MATCH_BANNER, getSafeImageUrl } from '../lib/assets.js';
+import { injectTournamentSeo, resetDefaultSeo } from '../lib/seo.js';
 
 interface TournamentDetailViewProps {
   tournamentId: string | number;
@@ -100,6 +101,20 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
       window.removeEventListener('flaxy_tournaments_updated', handleRefresh);
     };
   }, [tournamentId, user]);
+
+  useEffect(() => {
+    if (!tournament) return;
+    const cleanup = injectTournamentSeo(tournament, registeredCount);
+    return () => {
+      cleanup();
+    };
+  }, [tournament, registeredCount]);
+
+  useEffect(() => {
+    return () => {
+      resetDefaultSeo();
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.phone && !paymentWhatsapp) {
