@@ -1,9 +1,10 @@
 import { formatINR, formatISTDateTime } from './api.js';
 import { DEFAULT_MATCH_BANNER, getSafeImageUrl } from './assets.js';
 
-export const DEFAULT_SEO_TITLE = 'Flaxy Free Fire Tournament Platform';
+export const DEFAULT_SITE_URL = 'https://vlexa.free.nf';
+export const DEFAULT_SEO_TITLE = 'Vlexa – Free Fire Tournament Platform';
 export const DEFAULT_SEO_DESCRIPTION =
-  'Competitive Free Fire esports tournament platform with live room scheduling, automated countdowns, manual UPI verification, user wallet & dashboard, and admin controls.';
+  'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings.';
 
 export interface TournamentSeoData {
   id: string | number;
@@ -21,7 +22,16 @@ export interface TournamentSeoData {
   rules_text?: string;
 }
 
-const JSON_LD_SCRIPT_ID = 'flaxy-tournament-jsonld';
+const JSON_LD_SCRIPT_ID = 'vlexa-tournament-jsonld';
+
+function getCanonicalOrigin(): string {
+  if (typeof window === 'undefined') return DEFAULT_SITE_URL;
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.run.app')) {
+    return window.location.origin;
+  }
+  return window.location.origin || DEFAULT_SITE_URL;
+}
 
 function upsertMetaTag(
   attrName: 'name' | 'property',
@@ -59,12 +69,6 @@ function upsertCanonical(href: string): void {
   link.setAttribute('href', href);
 }
 
-function removeCanonical(): void {
-  if (typeof document === 'undefined') return;
-  const link = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
-  if (link) link.remove();
-}
-
 function upsertJsonLd(id: string, payload: Record<string, unknown> | null): void {
   if (typeof document === 'undefined') return;
   const existing = document.getElementById(id);
@@ -87,8 +91,94 @@ function resolveAbsoluteImageUrl(rawBanner?: string | null): string | null {
   const safe = getSafeImageUrl(rawBanner, DEFAULT_MATCH_BANNER);
   if (!safe || safe.startsWith('data:')) return null;
   if (safe.startsWith('http://') || safe.startsWith('https://')) return safe;
-  if (safe.startsWith('/')) return `${window.location.origin}${safe}`;
-  return `${window.location.origin}/${safe}`;
+  const origin = getCanonicalOrigin();
+  if (safe.startsWith('/')) return `${origin}${safe}`;
+  return `${origin}/${safe}`;
+}
+
+export function applyPublicPageSeo(view: string, params: Record<string, any> = {}): void {
+  if (typeof document === 'undefined') return;
+  if (view === 'tournament-detail') return;
+
+  const origin = getCanonicalOrigin();
+  let title = DEFAULT_SEO_TITLE;
+  let description = DEFAULT_SEO_DESCRIPTION;
+  let path = '/';
+  let isPrivate = false;
+
+  if (view === 'about') {
+    title = 'About Ankush Kumar – Founder & Developer of Vlexa';
+    description =
+      'Ankush Kumar is a Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.';
+    path = '/about';
+  } else if (view === 'tournaments') {
+    title = 'Free Fire Tournaments & Matches | Vlexa';
+    description =
+      'Browse Solo, Duo, Squad & Clash Squad Free Fire tournaments on Vlexa. Check entry fees, prize pools, match schedules, and available slots.';
+    path = '/tournaments';
+  } else if (view === 'live-rooms') {
+    title = 'Live Free Fire Custom Rooms & Schedules | Vlexa';
+    description =
+      'Track upcoming and live Free Fire tournament room opening times and IST match countdowns on Vlexa.';
+    path = '/live-rooms';
+  } else if (view === 'leaderboard') {
+    title = 'Player Rankings & Tournament Leaderboard | Vlexa';
+    description =
+      'View verified Free Fire tournament winners, kill leaders, and top-ranked players across matches on Vlexa.';
+    path = '/leaderboard';
+  } else if (view === 'faq') {
+    title = 'Frequently Asked Questions & Rules | Vlexa';
+    description =
+      'Find answers about joining Free Fire tournaments, room credentials, payment verification, and fair play guidelines on Vlexa.';
+    path = '/faq';
+  } else if (view === 'page') {
+    const slug = String(params.slug || 'privacy-policy');
+    const pageMeta: Record<string, { title: string; description: string }> = {
+      'privacy-policy': {
+        title: 'Privacy Policy | Vlexa',
+        description: 'Read how Vlexa handles tournament registration data and player privacy.'
+      },
+      'terms-and-conditions': {
+        title: 'Terms & Conditions | Vlexa',
+        description: 'Review official platform terms and conditions for participating on Vlexa.'
+      },
+      'refund-policy': {
+        title: 'Refund Policy | Vlexa',
+        description: 'Understand match cancellation and entry fee refund guidelines on Vlexa.'
+      },
+      'tournament-rules': {
+        title: 'Tournament Rules & Fair Play | Vlexa',
+        description: 'Read official Free Fire mobile tournament rules and fair play policies on Vlexa.'
+      }
+    };
+    const matched = pageMeta[slug];
+    title = matched ? matched.title : `${slug.replace(/-/g, ' ')} | Vlexa`;
+    description = matched ? matched.description : DEFAULT_SEO_DESCRIPTION;
+    path = `/page/${slug}`;
+  } else if (view === 'dashboard' || view === 'admin') {
+    isPrivate = true;
+    title = view === 'admin' ? 'Admin Panel | Vlexa' : 'Player Account | Vlexa';
+    description = DEFAULT_SEO_DESCRIPTION;
+    path = view === 'admin' ? '/admin' : '/dashboard';
+  }
+
+  const canonicalUrl = `${origin}${path}`;
+
+  document.title = title;
+  upsertMetaTag('name', 'description', description);
+  upsertMetaTag('name', 'robots', isPrivate ? 'noindex, nofollow' : 'index, follow');
+  upsertMetaTag('property', 'og:type', view === 'about' ? 'profile' : 'website');
+  upsertMetaTag('property', 'og:site_name', 'Vlexa');
+  upsertMetaTag('property', 'og:title', title);
+  upsertMetaTag('property', 'og:description', description);
+  upsertMetaTag('property', 'og:url', canonicalUrl);
+  upsertMetaTag('name', 'twitter:card', 'summary_large_image');
+  upsertMetaTag('name', 'twitter:title', title);
+  upsertMetaTag('name', 'twitter:description', description);
+
+  if (!isPrivate) {
+    upsertCanonical(canonicalUrl);
+  }
 }
 
 export function buildTournamentMeta(
@@ -111,14 +201,14 @@ export function buildTournamentMeta(
     ? formatISTDateTime(tournament.match_at)
     : 'IST Scheduled';
 
-  const rawTitle = `${tournament.title} (${mode} · ${map}) – ${prize} Prize | Flaxy Esports`;
-  const title = rawTitle.length > 70 ? `${tournament.title} | ${mode} · ${map} – Flaxy Esports` : rawTitle;
+  const rawTitle = `${tournament.title} (${mode} · ${map}) – ${prize} Prize | Vlexa`;
+  const title = rawTitle.length > 70 ? `${tournament.title} | ${mode} · ${map} – Vlexa` : rawTitle;
 
   const statusLabel = tournament.status || 'Registration Open';
   const description = `Join ${tournament.title} Free Fire ${mode} match on ${map}. Prize Pool: ${prize}, ${feeText}, ${availableSlots}/${totalSlots} slots left. Match: ${matchTimeText} (${statusLabel}).`;
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const canonicalUrl = `${origin}/#/tournament/${tournament.id}`;
+  const origin = getCanonicalOrigin();
+  const canonicalUrl = `${origin}/tournament/${tournament.id}`;
   const imageUrl = resolveAbsoluteImageUrl(tournament.banner_image);
 
   return { title, description, canonicalUrl, imageUrl };
@@ -137,9 +227,10 @@ export function injectTournamentSeo(
 
   document.title = title;
   upsertMetaTag('name', 'description', description);
+  upsertMetaTag('name', 'robots', 'index, follow');
 
   upsertMetaTag('property', 'og:type', 'website');
-  upsertMetaTag('property', 'og:site_name', 'Flaxy Esports');
+  upsertMetaTag('property', 'og:site_name', 'Vlexa');
   upsertMetaTag('property', 'og:title', title);
   upsertMetaTag('property', 'og:description', description);
   upsertMetaTag('property', 'og:url', canonicalUrl);
@@ -168,6 +259,8 @@ export function injectTournamentSeo(
     'Registration Open': 'https://schema.org/EventScheduled'
   };
 
+  const origin = getCanonicalOrigin();
+
   upsertJsonLd(JSON_LD_SCRIPT_ID, {
     '@context': 'https://schema.org',
     '@type': 'SportsEvent',
@@ -184,8 +277,8 @@ export function injectTournamentSeo(
     image: imageUrl ? [imageUrl] : undefined,
     organizer: {
       '@type': 'Organization',
-      name: 'Flaxy Esports',
-      url: typeof window !== 'undefined' ? window.location.origin : undefined
+      name: 'Vlexa',
+      url: origin
     },
     offers: {
       '@type': 'Offer',
@@ -204,18 +297,20 @@ export function injectTournamentSeo(
 
 export function resetDefaultSeo(): void {
   if (typeof document === 'undefined') return;
+  const origin = getCanonicalOrigin();
   document.title = DEFAULT_SEO_TITLE;
   upsertMetaTag('name', 'description', DEFAULT_SEO_DESCRIPTION);
+  upsertMetaTag('name', 'robots', 'index, follow');
   upsertMetaTag('property', 'og:type', 'website');
+  upsertMetaTag('property', 'og:site_name', 'Vlexa');
   upsertMetaTag('property', 'og:title', DEFAULT_SEO_TITLE);
   upsertMetaTag('property', 'og:description', DEFAULT_SEO_DESCRIPTION);
-  removeMetaTag('property', 'og:url');
+  upsertMetaTag('property', 'og:url', `${origin}/`);
   removeMetaTag('property', 'og:image');
-  removeMetaTag('property', 'og:site_name');
   upsertMetaTag('name', 'twitter:card', 'summary_large_image');
-  removeMetaTag('name', 'twitter:title');
-  removeMetaTag('name', 'twitter:description');
+  upsertMetaTag('name', 'twitter:title', DEFAULT_SEO_TITLE);
+  upsertMetaTag('name', 'twitter:description', DEFAULT_SEO_DESCRIPTION);
   removeMetaTag('name', 'twitter:image');
-  removeCanonical();
+  upsertCanonical(`${origin}/`);
   upsertJsonLd(JSON_LD_SCRIPT_ID, null);
 }

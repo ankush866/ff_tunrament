@@ -11,11 +11,13 @@ import { TournamentDetailView } from './views/TournamentDetailView.js';
 import { LiveRoomsView } from './views/LiveRoomsView.js';
 import { LeaderboardView } from './views/LeaderboardView.js';
 import { PageView } from './views/PageView.js';
+import { AboutView } from './views/AboutView.js';
 import { FaqView } from './views/FaqView.js';
 import { DashboardView } from './views/DashboardView.js';
 import { AdminPanelView } from './views/admin/AdminPanelView.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { apiRequest } from './lib/api.js';
+import { applyPublicPageSeo } from './lib/seo.js';
 
 function MainApp() {
   const { user } = useAuth();
@@ -45,61 +47,86 @@ function MainApp() {
     };
   }, [currentView]);
 
-  // Handle URL hash routes
+  // Handle clean URL path routes (with backward-compatible hash fallback)
   useEffect(() => {
-    const handleHash = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (hash.startsWith('/tournament/')) {
-        const id = hash.replace('/tournament/', '').trim();
+    const handleRoute = () => {
+      const hashRoute = window.location.hash.replace(/^#/, '');
+      const rawRoute = hashRoute && hashRoute.startsWith('/') ? hashRoute : window.location.pathname;
+      const route = rawRoute.replace(/\/+$/, '') || '/';
+
+      if (route.startsWith('/tournament/')) {
+        const id = route.replace('/tournament/', '').trim();
         if (id) {
           setCurrentView('tournament-detail');
           setViewParams({ id });
         }
-      } else if (hash.startsWith('/page/')) {
-        const slug = hash.replace('/page/', '');
+      } else if (route.startsWith('/page/')) {
+        const slug = route.replace('/page/', '').trim();
         setCurrentView('page');
         setViewParams({ slug });
-      } else if (hash === '/tournaments') {
+      } else if (route === '/about') {
+        setCurrentView('about');
+        setViewParams({});
+      } else if (route === '/tournaments') {
         setCurrentView('tournaments');
-      } else if (hash === '/live-rooms') {
+        setViewParams({});
+      } else if (route === '/live-rooms') {
         setCurrentView('live-rooms');
-      } else if (hash === '/leaderboard') {
+        setViewParams({});
+      } else if (route === '/leaderboard') {
         setCurrentView('leaderboard');
-      } else if (hash === '/faq') {
+        setViewParams({});
+      } else if (route === '/faq') {
         setCurrentView('faq');
-      } else if (hash === '/wallet') {
+        setViewParams({});
+      } else if (route === '/wallet') {
         setCurrentView('dashboard');
         setViewParams({ tab: 'payments' });
-      } else if (hash === '/dashboard') {
+      } else if (route === '/dashboard') {
         setCurrentView('dashboard');
         setViewParams({ tab: 'overview' });
-      } else if (hash === '/admin') {
+      } else if (route === '/admin') {
         setCurrentView('admin');
-      } else if (!hash || hash === '/' || hash === 'home') {
+        setViewParams({});
+      } else {
         setCurrentView('home');
+        setViewParams({});
       }
     };
 
-    handleHash();
-    window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
+    handleRoute();
+    window.addEventListener('popstate', handleRoute);
+    window.addEventListener('hashchange', handleRoute);
+    return () => {
+      window.removeEventListener('popstate', handleRoute);
+      window.removeEventListener('hashchange', handleRoute);
+    };
   }, []);
+
+  useEffect(() => {
+    applyPublicPageSeo(currentView, viewParams);
+  }, [currentView, viewParams]);
 
   const navigate = (view: string, params: any = {}) => {
     setCurrentView(view);
     setViewParams(params);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    if (view === 'home') window.location.hash = '';
-    else if (view === 'tournaments') window.location.hash = '/tournaments';
-    else if (view === 'live-rooms') window.location.hash = '/live-rooms';
-    else if (view === 'leaderboard') window.location.hash = '/leaderboard';
-    else if (view === 'faq') window.location.hash = '/faq';
-    else if (view === 'tournament-detail' && params.id) window.location.hash = `/tournament/${params.id}`;
-    else if (view === 'page' && params.slug) window.location.hash = `/page/${params.slug}`;
-    else if (view === 'dashboard' && params.tab === 'payments') window.location.hash = '/wallet';
-    else if (view === 'dashboard') window.location.hash = '/dashboard';
-    else if (view === 'admin') window.location.hash = '/admin';
+    let nextPath = '/';
+    if (view === 'about') nextPath = '/about';
+    else if (view === 'tournaments') nextPath = '/tournaments';
+    else if (view === 'live-rooms') nextPath = '/live-rooms';
+    else if (view === 'leaderboard') nextPath = '/leaderboard';
+    else if (view === 'faq') nextPath = '/faq';
+    else if (view === 'tournament-detail' && params.id) nextPath = `/tournament/${params.id}`;
+    else if (view === 'page' && params.slug) nextPath = `/page/${params.slug}`;
+    else if (view === 'dashboard' && params.tab === 'payments') nextPath = '/wallet';
+    else if (view === 'dashboard') nextPath = '/dashboard';
+    else if (view === 'admin') nextPath = '/admin';
+
+    if (window.location.pathname !== nextPath || window.location.hash) {
+      window.history.pushState({}, '', nextPath);
+    }
   };
 
   const openAuth = (mode: 'login' | 'register' | 'admin_login' = 'login') => {
@@ -152,6 +179,10 @@ function MainApp() {
 
         {currentView === 'page' && (
           <PageView slug={viewParams.slug || 'about-us'} onNavigate={navigate} />
+        )}
+
+        {currentView === 'about' && (
+          <AboutView onNavigate={navigate} />
         )}
 
         {currentView === 'faq' && (

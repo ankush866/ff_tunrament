@@ -42,29 +42,49 @@ async function startServer() {
     });
   });
 
-  // Dynamic Sitemap.xml Generator
-  app.get('/sitemap.xml', async (req: Request, res: Response) => {
-    const baseUrl = process.env.APP_URL || 'https://flaxy.gg';
+  // Dynamic Sitemap.xml Generator (public crawlable routes only)
+  app.get('/sitemap.xml', async (_req: Request, res: Response) => {
+    const baseUrl = (process.env.APP_URL || 'https://vlexa.free.nf').replace(/\/+$/, '');
+    const publicPaths = [
+      { loc: '/', changefreq: 'daily', priority: '1.0' },
+      { loc: '/about', changefreq: 'monthly', priority: '0.85' },
+      { loc: '/tournaments', changefreq: 'hourly', priority: '0.9' },
+      { loc: '/live-rooms', changefreq: 'hourly', priority: '0.9' },
+      { loc: '/leaderboard', changefreq: 'daily', priority: '0.8' },
+      { loc: '/faq', changefreq: 'weekly', priority: '0.7' },
+      { loc: '/page/privacy-policy', changefreq: 'monthly', priority: '0.5' },
+      { loc: '/page/terms-and-conditions', changefreq: 'monthly', priority: '0.5' },
+      { loc: '/page/refund-policy', changefreq: 'monthly', priority: '0.5' },
+      { loc: '/page/tournament-rules', changefreq: 'monthly', priority: '0.6' }
+    ];
+
+    const seen = new Set<string>(publicPaths.map(p => p.loc));
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
-    xml += `  <url><loc>${baseUrl}/</loc><changefreq>always</changefreq><priority>1.0</priority></url>\n`;
-    xml += `  <url><loc>${baseUrl}/tournaments</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>\n`;
-    xml += `  <url><loc>${baseUrl}/live-rooms</loc><changefreq>always</changefreq><priority>0.9</priority></url>\n`;
-    xml += `  <url><loc>${baseUrl}/leaderboard</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n`;
-    xml += `  <url><loc>${baseUrl}/faq</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>\n`;
+    for (const item of publicPaths) {
+      xml += `  <url><loc>${baseUrl}${item.loc}</loc><changefreq>${item.changefreq}</changefreq><priority>${item.priority}</priority></url>\n`;
+    }
 
     try {
       if (db.isPostgres) {
         const pages = (await db.prepare('SELECT slug, updated_at FROM website_pages WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
-        const tournaments = (await db.prepare('SELECT slug, updated_at FROM tournaments WHERE is_published = 1').all()) as { slug: string; updated_at: string }[];
+        const tournaments = (await db.prepare('SELECT id, updated_at FROM tournaments WHERE is_published = 1').all()) as { id: number | string; updated_at: string }[];
         for (const p of pages) {
-          xml += `  <url><loc>${baseUrl}/page/${p.slug}</loc><lastmod>${new Date(p.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.8</priority></url>\n`;
+          const loc = `/page/${p.slug}`;
+          if (!seen.has(loc)) {
+            seen.add(loc);
+            xml += `  <url><loc>${baseUrl}${loc}</loc><lastmod>${new Date(p.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.6</priority></url>\n`;
+          }
         }
         for (const t of tournaments) {
-          xml += `  <url><loc>${baseUrl}/tournament/${t.slug}</loc><lastmod>${new Date(t.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.85</priority></url>\n`;
+          const loc = `/tournament/${t.id}`;
+          if (!seen.has(loc)) {
+            seen.add(loc);
+            xml += `  <url><loc>${baseUrl}${loc}</loc><lastmod>${new Date(t.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.85</priority></url>\n`;
+          }
         }
       }
     } catch {
-      // Serve core sitemap URLs even if legacy SQL is unused
+      // Serve core public sitemap URLs even if legacy SQL is unused
     }
 
     xml += `</urlset>`;
@@ -73,10 +93,10 @@ async function startServer() {
   });
 
   // Robots.txt
-  app.get('/robots.txt', (req: Request, res: Response) => {
-    const baseUrl = process.env.APP_URL || 'https://flaxy.gg';
+  app.get('/robots.txt', (_req: Request, res: Response) => {
+    const baseUrl = (process.env.APP_URL || 'https://vlexa.free.nf').replace(/\/+$/, '');
     res.setHeader('Content-Type', 'text/plain');
-    res.send(`User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: ${baseUrl}/sitemap.xml\n`);
+    res.send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /dashboard\nDisallow: /wallet\nDisallow: /api\nSitemap: ${baseUrl}/sitemap.xml\n`);
   });
 
   // Google Search Console Verification File

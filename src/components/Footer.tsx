@@ -6,7 +6,7 @@ interface FooterProps {
   onNavigate: (view: string, params?: any) => void;
 }
 
-export const Footer: React.FC<FooterProps> = () => {
+export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const [settings, setSettings] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(localStorage.getItem('flaxy_site_settings') || '{}');
@@ -139,8 +139,18 @@ export const Footer: React.FC<FooterProps> = () => {
           </div>
         </div>
 
-        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 text-center md:text-left">
-          {settings.footer_text || '© 2026 FLAXY ESPORTS. All rights reserved.'}
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 text-center md:text-left">
+          <span>{settings.footer_text || '© 2026 FLAXY ESPORTS. All rights reserved.'}</span>
+          <a
+            href="/about"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('about');
+            }}
+            className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors underline-offset-4 hover:underline"
+          >
+            About the Founder
+          </a>
         </div>
       </div>
     </footer>
