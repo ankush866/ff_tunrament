@@ -25,12 +25,7 @@ export interface TournamentSeoData {
 const JSON_LD_SCRIPT_ID = 'vlexa-tournament-jsonld';
 
 function getCanonicalOrigin(): string {
-  if (typeof window === 'undefined') return DEFAULT_SITE_URL;
-  const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.run.app')) {
-    return window.location.origin;
-  }
-  return window.location.origin || DEFAULT_SITE_URL;
+  return DEFAULT_SITE_URL;
 }
 
 function upsertMetaTag(

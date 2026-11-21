@@ -1,0 +1,21 @@
+<IfModule mod_mime.c>
+  AddType application/xml;charset=utf-8 .xml
+  AddType text/plain;charset=utf-8 .txt
+  AddType text/html;charset=utf-8 .html
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Serve crawler and verification files directly without SPA HTML fallback
+  RewriteRule ^(sitemap\.xml|robots\.txt|googlef3256bb9c85090e7\.html)$ - [L]
+
+  # Serve existing static files and assets directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route SPA paths to index.html
+  RewriteRule ^ index.html [L]
+</IfModule>

@@ -1,7 +1,17 @@
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /wallet
+Disallow: /api
+Disallow: /login
+
 User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /dashboard
 Disallow: /wallet
 Disallow: /api
+Disallow: /login
+
 Sitemap: https://vlexa.free.nf/sitemap.xml

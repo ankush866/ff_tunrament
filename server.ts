@@ -42,26 +42,27 @@ async function startServer() {
     });
   });
 
-  // Dynamic Sitemap.xml Generator (public crawlable routes only)
+  // Dynamic Sitemap.xml Generator (public crawlable routes only on canonical Vlexa domain)
   app.get('/sitemap.xml', async (_req: Request, res: Response) => {
-    const baseUrl = (process.env.APP_URL || 'https://vlexa.free.nf').replace(/\/+$/, '');
+    const baseUrl = 'https://vlexa.free.nf';
+    const defaultLastMod = '2026-11-21';
     const publicPaths = [
       { loc: '/', changefreq: 'daily', priority: '1.0' },
-      { loc: '/about', changefreq: 'monthly', priority: '0.85' },
       { loc: '/tournaments', changefreq: 'hourly', priority: '0.9' },
       { loc: '/live-rooms', changefreq: 'hourly', priority: '0.9' },
+      { loc: '/about', changefreq: 'monthly', priority: '0.8' },
       { loc: '/leaderboard', changefreq: 'daily', priority: '0.8' },
       { loc: '/faq', changefreq: 'weekly', priority: '0.7' },
+      { loc: '/page/tournament-rules', changefreq: 'monthly', priority: '0.6' },
       { loc: '/page/privacy-policy', changefreq: 'monthly', priority: '0.5' },
       { loc: '/page/terms-and-conditions', changefreq: 'monthly', priority: '0.5' },
-      { loc: '/page/refund-policy', changefreq: 'monthly', priority: '0.5' },
-      { loc: '/page/tournament-rules', changefreq: 'monthly', priority: '0.6' }
+      { loc: '/page/refund-policy', changefreq: 'monthly', priority: '0.5' }
     ];
 
     const seen = new Set<string>(publicPaths.map(p => p.loc));
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
     for (const item of publicPaths) {
-      xml += `  <url><loc>${baseUrl}${item.loc}</loc><changefreq>${item.changefreq}</changefreq><priority>${item.priority}</priority></url>\n`;
+      xml += `  <url>\n    <loc>${baseUrl}${item.loc}</loc>\n    <lastmod>${defaultLastMod}</lastmod>\n    <changefreq>${item.changefreq}</changefreq>\n    <priority>${item.priority}</priority>\n  </url>\n`;
     }
 
     try {
@@ -72,14 +73,16 @@ async function startServer() {
           const loc = `/page/${p.slug}`;
           if (!seen.has(loc)) {
             seen.add(loc);
-            xml += `  <url><loc>${baseUrl}${loc}</loc><lastmod>${new Date(p.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.6</priority></url>\n`;
+            const lm = p.updated_at ? new Date(p.updated_at).toISOString().split('T')[0] : defaultLastMod;
+            xml += `  <url>\n    <loc>${baseUrl}${loc}</loc>\n    <lastmod>${lm}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`;
           }
         }
         for (const t of tournaments) {
           const loc = `/tournament/${t.id}`;
           if (!seen.has(loc)) {
             seen.add(loc);
-            xml += `  <url><loc>${baseUrl}${loc}</loc><lastmod>${new Date(t.updated_at).toISOString().split('T')[0]}</lastmod><priority>0.85</priority></url>\n`;
+            const lm = t.updated_at ? new Date(t.updated_at).toISOString().split('T')[0] : defaultLastMod;
+            xml += `  <url>\n    <loc>${baseUrl}${loc}</loc>\n    <lastmod>${lm}</lastmod>\n    <changefreq>hourly</changefreq>\n    <priority>0.85</priority>\n  </url>\n`;
           }
         }
       }
@@ -87,16 +90,37 @@ async function startServer() {
       // Serve core public sitemap URLs even if legacy SQL is unused
     }
 
-    xml += `</urlset>`;
-    res.setHeader('Content-Type', 'application/xml');
-    res.send(xml);
+    xml += `</urlset>\n`;
+    res.status(200).setHeader('Content-Type', 'application/xml; charset=utf-8').send(xml);
   });
 
   // Robots.txt
   app.get('/robots.txt', (_req: Request, res: Response) => {
-    const baseUrl = (process.env.APP_URL || 'https://vlexa.free.nf').replace(/\/+$/, '');
-    res.setHeader('Content-Type', 'text/plain');
-    res.send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /dashboard\nDisallow: /wallet\nDisallow: /api\nSitemap: ${baseUrl}/sitemap.xml\n`);
+    res
+      .status(200)
+      .setHeader('Content-Type', 'text/plain; charset=utf-8')
+      .send(
+        [
+          'User-agent: Googlebot',
+          'Allow: /',
+          'Disallow: /admin',
+          'Disallow: /dashboard',
+          'Disallow: /wallet',
+          'Disallow: /api',
+          'Disallow: /login',
+          '',
+          'User-agent: *',
+          'Allow: /',
+          'Disallow: /admin',
+          'Disallow: /dashboard',
+          'Disallow: /wallet',
+          'Disallow: /api',
+          'Disallow: /login',
+          '',
+          'Sitemap: https://vlexa.free.nf/sitemap.xml',
+          ''
+        ].join('\n')
+      );
   });
 
   // Google Search Console Verification File
