@@ -325,7 +325,7 @@ service cloud.firestore {
 
     function isValidSiteSettings(data) {
       return data.keys().hasAll(['site_name', 'upi_id', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['site_name', 'upi_id', 'whatsapp_number', 'whatsapp_url', 'support_email', 'contact_phone', 'payment_qr_url', 'site_tagline', 'site_description', 'site_logo', 'default_timezone', 'maintenance_mode', 'registration_enabled', 'primary_theme_color', 'secondary_theme_color', 'background_theme_color', 'scoring_rules', 'footer_text', 'social_instagram', 'social_youtube', 'social_discord', 'social_telegram', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['site_name', 'upi_id', 'whatsapp_number', 'whatsapp_url', 'support_email', 'contact_phone', 'payment_qr_url', 'site_tagline', 'site_description', 'site_logo', 'default_timezone', 'maintenance_mode', 'registration_enabled', 'primary_theme_color', 'secondary_theme_color', 'background_theme_color', 'scoring_rules', 'footer_text', 'social_instagram', 'social_youtube', 'social_discord', 'social_telegram', 'founder_name', 'founder_role', 'founder_profession', 'founder_bio', 'founder_photo_url', 'founder_linkedin', 'founder_github', 'founder_website', 'createdAt', 'updatedAt'])
         && data.site_name is string && data.site_name.size() <= 150
         && data.upi_id is string && data.upi_id.size() <= 128
         && isOptString(data, 'whatsapp_number', 32)
@@ -348,6 +348,14 @@ service cloud.firestore {
         && isOptString(data, 'social_youtube', 300)
         && isOptString(data, 'social_discord', 300)
         && isOptString(data, 'social_telegram', 300)
+        && isOptString(data, 'founder_name', 150)
+        && isOptString(data, 'founder_role', 200)
+        && isOptString(data, 'founder_profession', 200)
+        && isOptString(data, 'founder_bio', 3000)
+        && isOptString(data, 'founder_photo_url', 350000)
+        && isOptString(data, 'founder_linkedin', 300)
+        && isOptString(data, 'founder_github', 300)
+        && isOptString(data, 'founder_website', 300)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -879,7 +887,7 @@ service cloud.firestore {
         && isValidSiteSettings(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['site_name', 'upi_id', 'whatsapp_number', 'whatsapp_url', 'support_email', 'contact_phone', 'payment_qr_url', 'site_tagline', 'site_description', 'site_logo', 'default_timezone', 'maintenance_mode', 'registration_enabled', 'primary_theme_color', 'secondary_theme_color', 'background_theme_color', 'scoring_rules', 'footer_text', 'social_instagram', 'social_youtube', 'social_discord', 'social_telegram', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['site_name', 'upi_id', 'whatsapp_number', 'whatsapp_url', 'support_email', 'contact_phone', 'payment_qr_url', 'site_tagline', 'site_description', 'site_logo', 'default_timezone', 'maintenance_mode', 'registration_enabled', 'primary_theme_color', 'secondary_theme_color', 'background_theme_color', 'scoring_rules', 'footer_text', 'social_instagram', 'social_youtube', 'social_discord', 'social_telegram', 'founder_name', 'founder_role', 'founder_profession', 'founder_bio', 'founder_photo_url', 'founder_linkedin', 'founder_github', 'founder_website', 'updatedAt']);
       allow delete: if false;
     }
 

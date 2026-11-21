@@ -173,10 +173,42 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
       const cleanPayload: Record<string, any> = {};
       for (const k of allowedKeys) {
         const rawVal = incomingSettings[k] ?? (existingSnap.exists() ? existingSnap.data()[k] : DEFAULT_SITE_SETTINGS[k]) ?? '';
-        if ((k === 'payment_qr_url' || k === 'site_logo') && String(rawVal).startsWith('data:image/')) {
+        if ((k === 'payment_qr_url' || k === 'site_logo' || k === 'founder_photo_url') && String(rawVal).startsWith('data:image/')) {
           cleanPayload[k] = await compressImageDataUrl(String(rawVal), 600, 0.72);
         } else {
-          cleanPayload[k] = sanitizeStr(rawVal, k === 'scoring_rules' ? 2000 : k === 'site_description' ? 1000 : 500);
+          const maxLenMap: Record<string, number> = {
+            site_name: 150,
+            upi_id: 128,
+            whatsapp_number: 32,
+            whatsapp_url: 300,
+            support_email: 150,
+            contact_phone: 32,
+            payment_qr_url: 350000,
+            site_tagline: 300,
+            site_description: 1000,
+            site_logo: 350000,
+            default_timezone: 64,
+            maintenance_mode: 16,
+            registration_enabled: 16,
+            primary_theme_color: 32,
+            secondary_theme_color: 32,
+            background_theme_color: 32,
+            scoring_rules: 2000,
+            footer_text: 500,
+            social_instagram: 300,
+            social_youtube: 300,
+            social_discord: 300,
+            social_telegram: 300,
+            founder_name: 150,
+            founder_role: 200,
+            founder_profession: 200,
+            founder_bio: 3000,
+            founder_photo_url: 350000,
+            founder_linkedin: 300,
+            founder_github: 300,
+            founder_website: 300
+          };
+          cleanPayload[k] = sanitizeStr(rawVal, maxLenMap[k] ?? 500);
         }
       }
       if (!cleanPayload.site_name) cleanPayload.site_name = DEFAULT_SITE_SETTINGS.site_name;

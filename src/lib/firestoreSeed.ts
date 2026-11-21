@@ -27,7 +27,16 @@ export const DEFAULT_SITE_SETTINGS: Record<string, string> = {
   social_instagram: 'https://instagram.com/flaxy_esports',
   social_youtube: 'https://youtube.com/@flaxyesports',
   social_discord: 'https://discord.gg/flaxy',
-  social_telegram: 'https://t.me/flaxyesports'
+  social_telegram: 'https://t.me/flaxyesports',
+  founder_name: 'Ankush Kumar',
+  founder_role: 'Founder & Developer of Vlexa',
+  founder_profession: 'Self-taught Aspiring Full-Stack Developer',
+  founder_bio:
+    'Vlexa is an independently developed Free Fire Tournament Management Platform created to give mobile esports players a structured, transparent arena for competitive Solo, Duo, and Squad matches, live room scheduling, slot tracking, and match results.',
+  founder_photo_url: '',
+  founder_linkedin: 'https://www.linkedin.com/in/ankush-sharma-4a9911414/',
+  founder_github: 'https://github.com/ankush866',
+  founder_website: 'https://vlexa.free.nf'
 };
 
 const nowPlusHours = (h: number) => new Date(Date.now() + h * 3600000).toISOString();

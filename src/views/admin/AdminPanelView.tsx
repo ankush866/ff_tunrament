@@ -26,13 +26,16 @@ import {
   QrCode,
   Ban,
   UserCheck,
+  User,
   Share2,
-  Send
+  Send,
+  Trash
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime } from '../../lib/api.js';
 import { normalizeImageUrl, DEFAULT_MATCH_BANNER, getSafeImageUrl } from '../../lib/assets.js';
+import { compressImageDataUrl } from '../../lib/firebase.js';
 
 interface AdminPanelViewProps {
   onNavigate: (view: string, params?: any) => void;
@@ -388,12 +391,20 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await apiRequest('/admin/settings', {
+      const payloadToSave = {
+        ...settings,
+        founder_photo_url: settings.founder_photo_url?.startsWith('data:image/')
+          ? settings.founder_photo_url
+          : normalizeImageUrl(settings.founder_photo_url)
+      };
+      const res = await apiRequest<{ success?: boolean; settings?: Record<string, string> }>('/admin/settings', {
         method: 'PUT',
-        body: JSON.stringify({ settings })
+        body: JSON.stringify({ settings: payloadToSave })
       });
+      const savedSettings = res?.settings || payloadToSave;
+      setSettings(savedSettings);
       try {
-        localStorage.setItem('flaxy_site_settings', JSON.stringify(settings));
+        localStorage.setItem('flaxy_site_settings', JSON.stringify(savedSettings));
         window.dispatchEvent(new Event('flaxy_settings_updated'));
       } catch {}
       setSettingsSaved(true);
@@ -429,6 +440,19 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
       setSettings(prev => ({ ...prev, payment_qr_url: result }));
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleFounderPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const result = reader.result as string;
+      const compressed = await compressImageDataUrl(result, 600, 0.72);
+      setSettings(prev => ({ ...prev, founder_photo_url: compressed }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleOpenAdminTicket = async (ticket: any) => {
@@ -1816,7 +1840,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
           {/* Sub-tab bar */}
           <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-200 dark:border-slate-800">
             {[
-              { id: 'settings' as MoreSubTab, label: 'Site, UPI QR & Social', icon: Settings, show: isSuperAdmin },
+              { id: 'settings' as MoreSubTab, label: 'Site, QR, Social & About', icon: Settings, show: isSuperAdmin },
               {
                 id: 'tickets' as MoreSubTab,
                 label: `Support Desk (${stats.openTickets || 0})`,
@@ -2040,13 +2064,167 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     </div>
                   </div>
                 </div>
+
+                {/* About the Founder Editor & Photo Upload */}
+                <div className="sm:col-span-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 font-gaming font-bold text-sm text-slate-900 dark:text-white">
+                      <User className="w-4 h-4 text-orange-500" />
+                      <span>ABOUT THE FOUNDER PAGE &amp; PHOTO (VISIBLE TO ALL USERS)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('about')}
+                      className="px-2.5 py-1 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/25 font-semibold text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Open About Page</span>
+                    </button>
+                  </div>
+
+                  {/* Founder Photo Upload + Live Preview */}
+                  <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 border-2 border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
+                      {settings.founder_photo_url ? (
+                        <img
+                          src={getSafeImageUrl(settings.founder_photo_url, '')}
+                          alt={settings.founder_name || 'Founder Photo Preview'}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="w-9 h-9 text-white" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 w-full space-y-2.5">
+                      <div className="flex flex-wrap gap-2">
+                        <label className="flex-1 min-w-[160px] flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl cursor-pointer text-slate-800 dark:text-slate-200 font-semibold">
+                          <Upload className="w-4 h-4 text-orange-500" />
+                          <span>Upload Founder Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFounderPhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        {settings.founder_photo_url && (
+                          <button
+                            type="button"
+                            onClick={() => setSettings(prev => ({ ...prev, founder_photo_url: '' }))}
+                            className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/25 rounded-xl font-semibold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Trash className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={settings.founder_photo_url || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_photo_url: e.target.value }))}
+                        placeholder="Or paste Founder photo URL / Google Drive link..."
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Founder Text Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Founder Name
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.founder_name || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_name: e.target.value }))}
+                        placeholder="Ankush Kumar"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Role
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.founder_role || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_role: e.target.value }))}
+                        placeholder="Founder & Developer of Vlexa"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Profession
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.founder_profession || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_profession: e.target.value }))}
+                        placeholder="Self-taught Aspiring Full-Stack Developer"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        About Description / Bio
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={settings.founder_bio || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_bio: e.target.value }))}
+                        placeholder="Describe your work and Vlexa platform..."
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-blue-600 dark:text-blue-400 mb-1">
+                        LinkedIn URL
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.founder_linkedin || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_linkedin: e.target.value }))}
+                        placeholder="https://www.linkedin.com/in/ankush-sharma-4a9911414/"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        GitHub URL
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.founder_github || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_github: e.target.value }))}
+                        placeholder="https://github.com/ankush866"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-orange-600 dark:text-orange-400 mb-1">
+                        Official Platform Website URL
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.founder_website || ''}
+                        onChange={e => setSettings(prev => ({ ...prev, founder_website: e.target.value }))}
+                        placeholder="https://vlexa.free.nf"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow"
+                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow cursor-pointer"
               >
-                SAVE SETTINGS & SOCIAL LINKS
+                SAVE SETTINGS, SOCIAL &amp; ABOUT PAGE
               </button>
             </form>
           )}

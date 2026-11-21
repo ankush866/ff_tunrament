@@ -139,7 +139,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 text-center md:text-left">
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3 text-center md:text-left">
           <span>{settings.footer_text || '© 2026 FLAXY ESPORTS. All rights reserved.'}</span>
           <a
             href="/about"
@@ -147,7 +147,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               e.preventDefault();
               onNavigate('about');
             }}
-            className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors underline-offset-4 hover:underline"
+            className="px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-600 border border-orange-500/25 text-orange-600 dark:text-orange-400 hover:text-white font-semibold transition-colors whitespace-nowrap"
           >
             About the Founder
           </a>
