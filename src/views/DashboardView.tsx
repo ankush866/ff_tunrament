@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime } from '../lib/api.js';
 import { DEFAULT_MATCH_BANNER, DEFAULT_PLAYER_AVATAR, getSafeImageUrl } from '../lib/assets.js';
+import { SpringActionButton, type SaveStatus } from '../components/SpringActionButton.js';
 
 interface DashboardViewProps {
   initialTab?: string;
@@ -54,6 +55,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
   const [profileAvatar, setProfileAvatar] = useState(user?.avatar_url || '');
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
+  const [profileSaveStatus, setProfileSaveStatus] = useState<SaveStatus>('idle');
+  const [teamSaveStatus, setTeamSaveStatus] = useState<SaveStatus>('idle');
+  const [ticketSaveStatus, setTicketSaveStatus] = useState<SaveStatus>('idle');
 
   const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -135,13 +139,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
   const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     setTeamMsg(null);
+    setTeamSaveStatus('loading');
     try {
       await apiRequest('/teams', { method: 'POST', body: JSON.stringify({ name: newTeamName, tag: newTeamTag }) });
       setNewTeamName('');
       setNewTeamTag('');
+      setTeamSaveStatus('success');
       setTeamMsg({ text: 'Duo team created!', isError: false });
       fetchUserData();
+      setTimeout(() => setTeamSaveStatus('idle'), 2200);
     } catch (err: any) {
+      setTeamSaveStatus('idle');
       setTeamMsg({ text: err.message, isError: true });
     }
   };
@@ -174,16 +182,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTicketSaveStatus('loading');
     try {
       await apiRequest('/tickets', {
         method: 'POST',
         body: JSON.stringify({ category: ticketCategory, subject: ticketSubject, message: ticketMessage })
       });
+      setTicketSaveStatus('success');
+      await new Promise(r => setTimeout(r, 450));
+      setTicketSaveStatus('idle');
       setShowNewTicket(false);
       setTicketSubject('');
       setTicketMessage('');
       fetchUserData();
-    } catch {}
+    } catch {
+      setTicketSaveStatus('idle');
+    }
   };
 
   const handleOpenTicketThread = async (ticket: any) => {
@@ -210,6 +224,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileMsg(null);
+    setProfileSaveStatus('loading');
     try {
       await updateProfile({
         full_name: profileName,
@@ -218,9 +233,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
         phone: profilePhone,
         avatar_url: profileAvatar
       });
-      setProfileMsg('Profile saved!');
-      setTimeout(() => setProfileMsg(null), 3000);
+      setProfileSaveStatus('success');
+      setProfileMsg('Profile saved & confirmed!');
+      setTimeout(() => {
+        setProfileSaveStatus('idle');
+        setProfileMsg(null);
+      }, 2800);
     } catch (err: any) {
+      setProfileSaveStatus('idle');
       setProfileMsg(err.message);
     }
   };
@@ -551,9 +571,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
                   <input type="text" required placeholder="Team Name" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} className={`${inputClass} sm:col-span-2`} />
                   <input type="text" placeholder="Tag (e.g. FLX)" value={newTeamTag} onChange={e => setNewTeamTag(e.target.value)} className={`${inputClass} uppercase`} />
                 </div>
-                <button type="submit" className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-gaming font-bold text-xs rounded-xl">
-                  Create Team
-                </button>
+                <SpringActionButton
+                  type="submit"
+                  status={teamSaveStatus}
+                  idleLabel="Confirm & Create Team"
+                  loadingLabel="Creating..."
+                  successLabel="Team Created!"
+                />
               </form>
 
               {teams.map(team => (
@@ -655,9 +679,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
                     <input type="text" required placeholder="Subject" value={ticketSubject} onChange={e => setTicketSubject(e.target.value)} className={inputClass} />
                   </div>
                   <textarea required rows={3} placeholder="Describe your issue..." value={ticketMessage} onChange={e => setTicketMessage(e.target.value)} className={inputClass} />
-                  <button type="submit" className="px-5 py-2.5 bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl">
-                    Submit Ticket
-                  </button>
+                  <SpringActionButton
+                    type="submit"
+                    status={ticketSaveStatus}
+                    idleLabel="Confirm & Submit Ticket"
+                    loadingLabel="Submitting..."
+                    successLabel="Ticket Submitted!"
+                  />
                 </form>
               )}
 
@@ -760,9 +788,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ initialTab = 'over
                   </div>
                 </div>
 
-                <button type="submit" className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-gaming font-bold text-xs rounded-xl">
-                  Save Profile
-                </button>
+                <div className="sticky bottom-[4.5rem] md:bottom-3 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg">
+                  <SpringActionButton
+                    type="submit"
+                    status={profileSaveStatus}
+                    idleLabel="Confirm & Save Profile"
+                    loadingLabel="Saving Profile..."
+                    successLabel="Profile Confirmed & Saved!"
+                    className="w-full"
+                  />
+                </div>
               </form>
 
               <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">

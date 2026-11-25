@@ -2,6 +2,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  html {
+    scroll-padding-bottom: 6.5rem;
+  }
+
   html, body {
     width: 100%;
     overflow-x: clip;
@@ -39,6 +43,28 @@
       font-size: 16px !important;
     }
   }
+}
+
+@keyframes springPop {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.75;
+  }
+  55% {
+    transform: scale(1.045);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(0.985);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-spring-pop {
+  animation: springPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 /* Custom Scrollbar */

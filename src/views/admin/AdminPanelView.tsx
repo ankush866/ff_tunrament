@@ -36,6 +36,7 @@ import { useAuth } from '../../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime } from '../../lib/api.js';
 import { normalizeImageUrl, DEFAULT_MATCH_BANNER, getSafeImageUrl } from '../../lib/assets.js';
 import { compressImageDataUrl } from '../../lib/firebase.js';
+import { SpringActionButton, type SaveStatus } from '../../components/SpringActionButton.js';
 
 interface AdminPanelViewProps {
   onNavigate: (view: string, params?: any) => void;
@@ -123,9 +124,15 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   const [mediaUploadUrl, setMediaUploadUrl] = useState('');
   const [mediaName, setMediaName] = useState('');
 
-  // Global Settings
+  // Global Settings & Save Statuses
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaveStatus, setSettingsSaveStatus] = useState<SaveStatus>('idle');
+  const [roomSaveStatus, setRoomSaveStatus] = useState<SaveStatus>('idle');
+  const [resultsSaveStatus, setResultsSaveStatus] = useState<SaveStatus>('idle');
+  const [pageSaveStatus, setPageSaveStatus] = useState<SaveStatus>('idle');
+  const [tournamentSaveStatus, setTournamentSaveStatus] = useState<SaveStatus>('idle');
+  const [rejectSaveStatus, setRejectSaveStatus] = useState<SaveStatus>('idle');
 
   // Users Admin
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -259,6 +266,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   const handleSaveRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     setRoomMessage(null);
+    setRoomSaveStatus('loading');
     try {
       await apiRequest('/admin/rooms', {
         method: 'POST',
@@ -273,9 +281,14 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
           is_published: 1
         })
       });
-      setRoomMessage('Room ID, Password and IST timing saved.');
-      setTimeout(() => setRoomMessage(null), 3500);
+      setRoomSaveStatus('success');
+      setRoomMessage('Room ID, Password and IST timing saved & confirmed.');
+      setTimeout(() => {
+        setRoomSaveStatus('idle');
+        setRoomMessage(null);
+      }, 3000);
     } catch (err: any) {
+      setRoomSaveStatus('idle');
       alert(err.message);
     }
   };
@@ -299,17 +312,24 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   };
 
   const handleVerifyPayment = async (paymentId: string | number, status: 'approved' | 'rejected', reason = '') => {
+    if (status === 'rejected') setRejectSaveStatus('loading');
     try {
       await apiRequest(`/admin/payments/${paymentId}/verify`, {
         method: 'POST',
         body: JSON.stringify({ status, rejection_reason: reason })
       });
+      if (status === 'rejected') {
+        setRejectSaveStatus('success');
+        await new Promise(r => setTimeout(r, 450));
+        setRejectSaveStatus('idle');
+      }
       setRejectModalPayment(null);
       setRejectionReason('');
       apiRequest<{ payments: any[] }>(`/admin/payments?status=${paymentFilter}`)
         .then(res => setPayments(res.payments || []));
       fetchStats();
     } catch (err: any) {
+      setRejectSaveStatus('idle');
       alert(err.message);
     }
   };
@@ -332,20 +352,24 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
 
   const handleSaveResults = async () => {
     if (!selectedTournamentForResults) return;
+    setResultsSaveStatus('loading');
     try {
       await apiRequest(`/admin/results/${selectedTournamentForResults.id}`, {
         method: 'POST',
         body: JSON.stringify({ entries: resultsEntries })
       });
+      setResultsSaveStatus('success');
       confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-      alert('Results published and winners notified!');
+      setTimeout(() => setResultsSaveStatus('idle'), 2800);
     } catch (err: any) {
+      setResultsSaveStatus('idle');
       alert(err.message);
     }
   };
 
   const handleSavePage = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPageSaveStatus('loading');
     try {
       if (editingPage.id) {
         await apiRequest(`/cms/pages/${editingPage.id}`, {
@@ -358,10 +382,14 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
           body: JSON.stringify(editingPage)
         });
       }
+      setPageSaveStatus('success');
+      await new Promise(r => setTimeout(r, 500));
+      setPageSaveStatus('idle');
       setShowPageModal(false);
       setEditingPage(null);
       apiRequest<{ pages: any[] }>('/cms/pages').then(res => setPages(res.pages || []));
     } catch (err: any) {
+      setPageSaveStatus('idle');
       alert(err.message);
     }
   };
@@ -390,6 +418,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSettingsSaveStatus('loading');
     try {
       const payloadToSave = {
         ...settings,
@@ -407,9 +436,14 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
         localStorage.setItem('flaxy_site_settings', JSON.stringify(savedSettings));
         window.dispatchEvent(new Event('flaxy_settings_updated'));
       } catch {}
+      setSettingsSaveStatus('success');
       setSettingsSaved(true);
-      setTimeout(() => setSettingsSaved(false), 3000);
+      setTimeout(() => {
+        setSettingsSaveStatus('idle');
+        setSettingsSaved(false);
+      }, 3000);
     } catch (err: any) {
+      setSettingsSaveStatus('idle');
       alert(err.message);
     }
   };
@@ -1108,33 +1142,43 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
           )}
 
           {viewingScreenshot && (
-            <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/85 backdrop-blur-sm">
-              <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
-                <div className="relative max-w-lg w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center space-y-3 my-auto">
-                  <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
-                    <span className="font-gaming font-bold text-sm text-slate-900 dark:text-white">
-                      Payment Receipt Screenshot
-                    </span>
-                    <button
-                      onClick={() => setViewingScreenshot(null)}
-                      className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <img src={viewingScreenshot} alt="Receipt" className="max-h-[70vh] mx-auto rounded-xl object-contain" />
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4">
+              <div className="relative max-w-lg w-full max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+                <div className="shrink-0 flex justify-between items-center px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className="font-gaming font-bold text-sm text-slate-900 dark:text-white">
+                    Payment Receipt Screenshot
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setViewingScreenshot(null)}
+                    className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-4 text-center">
+                  <img src={viewingScreenshot} alt="Receipt" className="max-h-[70dvh] mx-auto rounded-xl object-contain" />
                 </div>
               </div>
             </div>
           )}
 
           {rejectModalPayment && (
-            <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
-              <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
-                <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 my-auto">
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+              <div className="w-full max-w-md max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+                <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
                   <h4 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
                     REJECT PAYMENT
                   </h4>
+                  <button
+                    type="button"
+                    onClick={() => { setRejectModalPayment(null); setRejectSaveStatus('idle'); }}
+                    className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-5 space-y-3">
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Enter reason for declining this UPI payment.
                   </p>
@@ -1146,20 +1190,25 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     onChange={e => setRejectionReason(e.target.value)}
                     className={inputCls}
                   />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setRejectModalPayment(null)}
-                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleVerifyPayment(rejectModalPayment.id, 'rejected', rejectionReason)}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs"
-                    >
-                      Confirm Reject
-                    </button>
-                  </div>
+                </div>
+                <div className="shrink-0 px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => { setRejectModalPayment(null); setRejectSaveStatus('idle'); }}
+                    className="flex-1 min-h-[46px] px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <SpringActionButton
+                    type="button"
+                    variant="danger"
+                    status={rejectSaveStatus}
+                    onClick={() => handleVerifyPayment(rejectModalPayment.id, 'rejected', rejectionReason)}
+                    idleLabel="Confirm Reject"
+                    loadingLabel="Rejecting..."
+                    successLabel="Rejected!"
+                    className="flex-[2]"
+                  />
                 </div>
               </div>
             </div>
@@ -1292,52 +1341,59 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               </div>
 
               {showTournamentModal && editingTournament && (
-                <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
-                  <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
-                    <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 my-auto">
-                      <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                        <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
-                          {editingTournament.id ? 'EDIT MATCH' : 'CREATE NEW MATCH'}
-                        </h3>
-                        <button
-                          onClick={() => setShowTournamentModal(false)}
-                          className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1"
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      <form
-                        onSubmit={async e => {
-                          e.preventDefault();
-                          try {
-                            const normalizedBanner = normalizeImageUrl(editingTournament.banner_image);
-                            const payload = {
-                              ...editingTournament,
-                              banner_image: normalizedBanner,
-                              match_at: new Date(editingTournament.match_at).toISOString()
-                            };
-                            if (editingTournament.id) {
-                              await apiRequest(`/admin/tournaments/${editingTournament.id}`, {
-                                method: 'PUT',
-                                body: JSON.stringify(payload)
-                              });
-                            } else {
-                              await apiRequest('/admin/tournaments', {
-                                method: 'POST',
-                                body: JSON.stringify(payload)
-                              });
-                            }
-                            setShowTournamentModal(false);
-                            const refreshed = await apiRequest<{ tournaments: any[] }>('/tournaments');
-                            setTournaments(refreshed.tournaments || []);
-                            window.dispatchEvent(new Event('flaxy_tournaments_updated'));
-                          } catch (err: any) {
-                            alert(err.message);
-                          }
-                        }}
-                        className="space-y-4 text-xs"
+                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+                  <div className="w-full max-w-xl max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+                    <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                      <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
+                        {editingTournament.id ? 'EDIT MATCH' : 'CREATE NEW MATCH'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => { setShowTournamentModal(false); setTournamentSaveStatus('idle'); }}
+                        className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
                       >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form
+                      id="admin-tournament-form"
+                      onSubmit={async e => {
+                        e.preventDefault();
+                        setTournamentSaveStatus('loading');
+                        try {
+                          const normalizedBanner = normalizeImageUrl(editingTournament.banner_image);
+                          const payload = {
+                            ...editingTournament,
+                            banner_image: normalizedBanner,
+                            match_at: new Date(editingTournament.match_at).toISOString()
+                          };
+                          if (editingTournament.id) {
+                            await apiRequest(`/admin/tournaments/${editingTournament.id}`, {
+                              method: 'PUT',
+                              body: JSON.stringify(payload)
+                            });
+                          } else {
+                            await apiRequest('/admin/tournaments', {
+                              method: 'POST',
+                              body: JSON.stringify(payload)
+                            });
+                          }
+                          setTournamentSaveStatus('success');
+                          await new Promise(r => setTimeout(r, 550));
+                          setTournamentSaveStatus('idle');
+                          setShowTournamentModal(false);
+                          const refreshed = await apiRequest<{ tournaments: any[] }>('/tournaments');
+                          setTournaments(refreshed.tournaments || []);
+                          window.dispatchEvent(new Event('flaxy_tournaments_updated'));
+                        } catch (err: any) {
+                          setTournamentSaveStatus('idle');
+                          alert(err.message);
+                        }
+                      }}
+                      className="flex-1 min-h-0 flex flex-col text-xs"
+                    >
+                      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] p-4 sm:p-5 pb-8 space-y-4">
                       <div>
                         <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           Match Title *
@@ -1528,18 +1584,31 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                           className={inputCls}
                         />
                       </div>
+                      </div>
 
-                      <button
-                        type="submit"
-                        className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow"
-                      >
-                        SAVE MATCH
-                      </button>
+                      {/* Always-Visible Pinned Confirm & Save Footer */}
+                      <div className="shrink-0 px-4 sm:px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => { setShowTournamentModal(false); setTournamentSaveStatus('idle'); }}
+                          className="flex-1 min-h-[46px] py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <SpringActionButton
+                          type="submit"
+                          form="admin-tournament-form"
+                          status={tournamentSaveStatus}
+                          idleLabel="Confirm & Save Match"
+                          loadingLabel="Saving Match..."
+                          successLabel="Match Confirmed!"
+                          className="flex-[2]"
+                        />
+                      </div>
                     </form>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
             </div>
           )}
 
@@ -1662,12 +1731,16 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                       </select>
                     </div>
 
-                    <button
-                      type="submit"
-                      className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow"
-                    >
-                      SAVE ROOM CREDENTIALS
-                    </button>
+                    <div className="sticky bottom-[4.5rem] md:bottom-3 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg">
+                      <SpringActionButton
+                        type="submit"
+                        status={roomSaveStatus}
+                        idleLabel="Confirm & Save Room Credentials"
+                        loadingLabel="Saving Room..."
+                        successLabel="Room Saved & Confirmed!"
+                        className="w-full"
+                      />
+                    </div>
                   </form>
 
                   <div className={`${cardCls} lg:col-span-5 p-5 space-y-4 text-xs`}>
@@ -1819,12 +1892,17 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     ))}
                   </div>
 
-                  <button
-                    onClick={handleSaveResults}
-                    className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-extrabold text-xs rounded-xl shadow"
-                  >
-                    PUBLISH RESULTS & DECLARE WINNERS
-                  </button>
+                  <div className="sticky bottom-[4.5rem] md:bottom-3 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg">
+                    <SpringActionButton
+                      type="button"
+                      onClick={handleSaveResults}
+                      status={resultsSaveStatus}
+                      idleLabel="Confirm & Publish Results"
+                      loadingLabel="Publishing Results..."
+                      successLabel="Results Published!"
+                      className="w-full"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -2220,12 +2298,16 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow cursor-pointer"
-              >
-                SAVE SETTINGS, SOCIAL &amp; ABOUT PAGE
-              </button>
+              <div className="sticky bottom-[4.5rem] md:bottom-3 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg">
+                <SpringActionButton
+                  type="submit"
+                  status={settingsSaveStatus}
+                  idleLabel="Confirm & Save Settings, Social & About Page"
+                  loadingLabel="Saving & Confirming..."
+                  successLabel="Confirmed & Saved!"
+                  className="w-full"
+                />
+              </div>
             </form>
           )}
 
@@ -2434,19 +2516,23 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               </div>
 
               {showPageModal && editingPage && (
-                <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
-                  <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
-                    <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 my-auto">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                      <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
+                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+                  <div className="w-full max-w-2xl max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+                    <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                      <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white truncate pr-2">
                         {editingPage.id ? `EDIT: ${editingPage.title}` : 'NEW PAGE'}
                       </h3>
-                      <button onClick={() => setShowPageModal(false)} className="text-slate-500 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => { setShowPageModal(false); setPageSaveStatus('idle'); }}
+                        className="text-slate-500 px-2 py-1 cursor-pointer shrink-0"
+                      >
                         ✕
                       </button>
                     </div>
 
-                    <form onSubmit={handleSavePage} className="space-y-4 text-xs">
+                    <form id="admin-cms-page-form" onSubmit={handleSavePage} className="flex-1 min-h-0 flex flex-col text-xs">
+                      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] p-4 sm:p-5 pb-8 space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -2516,32 +2602,44 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                           </select>
                         </div>
                       </div>
+                      </div>
 
-                      <button
-                        type="submit"
-                        className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl"
-                      >
-                        SAVE & PUBLISH
-                      </button>
+                      {/* Always-Visible Pinned Confirm & Publish Footer */}
+                      <div className="shrink-0 px-4 sm:px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => { setShowPageModal(false); setPageSaveStatus('idle'); }}
+                          className="flex-1 min-h-[46px] py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <SpringActionButton
+                          type="submit"
+                          form="admin-cms-page-form"
+                          status={pageSaveStatus}
+                          idleLabel="Confirm & Save & Publish"
+                          loadingLabel="Publishing..."
+                          successLabel="Published & Confirmed!"
+                          className="flex-[2]"
+                        />
+                      </div>
                     </form>
                   </div>
                 </div>
-              </div>
               )}
 
               {showVersionsDrawer && (
-                <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] bg-black/75 backdrop-blur-sm">
-                  <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
-                    <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 my-auto">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+                  <div className="w-full max-w-lg max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+                    <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800">
                       <h4 className="font-gaming font-bold text-base text-slate-900 dark:text-white">
                         VERSION HISTORY
                       </h4>
-                      <button onClick={() => setShowVersionsDrawer(false)} className="text-slate-500 px-2 py-1">
+                      <button onClick={() => setShowVersionsDrawer(false)} className="text-slate-500 px-2 py-1 cursor-pointer">
                         ✕
                       </button>
                     </div>
-                    <div className="space-y-2.5">
+                    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-5 space-y-2.5">
                       {pageVersions.map(v => (
                         <div
                           key={v.id}
@@ -2557,7 +2655,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                           </div>
                           <button
                             onClick={() => handleRestoreVersion(v.page_id, v.version_num)}
-                            className="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold rounded-lg"
+                            className="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold rounded-lg cursor-pointer"
                           >
                             Restore
                           </button>
@@ -2566,7 +2664,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     </div>
                   </div>
                 </div>
-              </div>
               )}
             </div>
           )}

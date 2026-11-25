@@ -24,25 +24,10 @@ async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
   const PORT = isProd && process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+  app.set('trust proxy', 1);
   app.use(cors());
-  app.use(express.json({ limit: '15mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-  // Global Auth Token Extractor
-  app.use(authenticateUser);
-
-  // Health check
-  app.get('/api/health', (req: Request, res: Response) => {
-    res.json({
-      status: 'ok',
-      time: new Date().toISOString(),
-      timezone: 'Asia/Kolkata',
-      database: 'firebase-firestore',
-      isPostgres: db.isPostgres
-    });
-  });
-
-  // Dynamic Sitemap.xml Generator (public crawlable routes only on canonical Vlexa domain)
+  // Dynamic Sitemap.xml Generator (public crawlable routes only on canonical Vlexa domain, before auth middleware)
   app.get('/sitemap.xml', async (_req: Request, res: Response) => {
     const baseUrl = 'https://vlexa.free.nf';
     const defaultLastMod = '2026-11-21';
@@ -91,14 +76,19 @@ async function startServer() {
     }
 
     xml += `</urlset>\n`;
-    res.status(200).setHeader('Content-Type', 'application/xml; charset=utf-8').send(xml);
+    res
+      .status(200)
+      .setHeader('Content-Type', 'application/xml; charset=utf-8')
+      .setHeader('Cache-Control', 'public, max-age=3600')
+      .send(xml);
   });
 
-  // Robots.txt
+  // Robots.txt (before auth middleware)
   app.get('/robots.txt', (_req: Request, res: Response) => {
     res
       .status(200)
       .setHeader('Content-Type', 'text/plain; charset=utf-8')
+      .setHeader('Cache-Control', 'public, max-age=3600')
       .send(
         [
           'User-agent: Googlebot',
@@ -123,10 +113,29 @@ async function startServer() {
       );
   });
 
-  // Google Search Console Verification File
+  // Google Search Console Verification File (before auth middleware)
   app.get('/googlef3256bb9c85090e7.html', (_req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.send('google-site-verification: googlef3256bb9c85090e7.html');
+    res
+      .status(200)
+      .setHeader('Content-Type', 'text/html; charset=utf-8')
+      .send('google-site-verification: googlef3256bb9c85090e7.html');
+  });
+
+  app.use(express.json({ limit: '15mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+
+  // Global Auth Token Extractor (for app/API routes)
+  app.use(authenticateUser);
+
+  // Health check
+  app.get('/api/health', (req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      time: new Date().toISOString(),
+      timezone: 'Asia/Kolkata',
+      database: 'firebase-firestore',
+      isPostgres: db.isPostgres
+    });
   });
 
   // Mount API Router
