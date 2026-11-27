@@ -129,7 +129,7 @@ export const LiveRoomsView: React.FC<LiveRoomsViewProps> = ({ onNavigate, onOpen
                       <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                       <span>{item.game_mode} · {item.map_name} · {room?.status || 'Scheduled'}</span>
                     </div>
-                    <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">{item.title}</h3>
+                    <h2 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">{item.title}</h2>
                     <div className="text-xs text-slate-600 dark:text-slate-400 tabular-nums">
                       Prize: <strong className="text-emerald-600 dark:text-emerald-400">{formatINR(item.prize_pool)}</strong> · Entry:{' '}
                       <strong className="text-orange-600 dark:text-orange-400">{item.entry_fee === 0 ? 'FREE' : formatINR(item.entry_fee)}</strong>

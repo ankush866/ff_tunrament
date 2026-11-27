@@ -164,9 +164,9 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({ onNavigate }) 
                           {tournament.status}
                         </span>
                       </div>
-                      <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white line-clamp-1">
+                      <h2 className="font-gaming font-bold text-lg text-slate-900 dark:text-white line-clamp-1">
                         {tournament.title}
-                      </h3>
+                      </h2>
                     </div>
 
                     <div className="space-y-1">

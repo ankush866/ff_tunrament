@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, ArrowLeft, Clock, Share2, Check, AlertCircle } from 'lucide-react';
 import { apiRequest, formatISTDateTime } from '../lib/api.js';
+import { applyPublicPageSeo } from '../lib/seo.js';
 
 interface PageViewProps {
   slug: string;
@@ -15,14 +16,23 @@ export const PageView: React.FC<PageViewProps> = ({ slug, onNavigate }) => {
   useEffect(() => {
     setLoading(true);
     apiRequest<{ page: any }>(`/cms/pages/${slug}`)
-      .then(res => setPage(res.page))
+      .then(res => {
+        setPage(res.page);
+        if (res.page) {
+          applyPublicPageSeo('page', {
+            slug,
+            metaTitle: res.page.meta_title || (res.page.title ? `${res.page.title} | Vlexa` : undefined),
+            metaDescription: res.page.meta_description || undefined
+          });
+        }
+      })
       .catch(() => setPage(null))
       .finally(() => setLoading(false));
   }, [slug]);
 
   const handleShare = () => {
     if (navigator.share) {
-      navigator.share({ title: page?.title || 'Flaxy Esports', url: window.location.href }).catch(() => {});
+      navigator.share({ title: page?.title || 'Vlexa', url: window.location.href }).catch(() => {});
     } else {
       navigator.clipboard.writeText(window.location.href);
       setCopied(true);

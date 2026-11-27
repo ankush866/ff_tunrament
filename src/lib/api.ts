@@ -132,6 +132,47 @@ function requireAuthUid(): string {
   return cu.uid;
 }
 
+function sanitizeLegacyBrandText(text: string): string {
+  return text
+    .replace(/\bFLAXY\s+ESPORTS\s+TOURNAMENTS\b/gi, 'Vlexa')
+    .replace(/\bFlaxy\s+Esports\b/gi, 'Vlexa')
+    .replace(/\bFlaxy\b/gi, 'Vlexa')
+    .replace(/https?:\/\/vlexa\.free\.nf\/?/gi, 'https://ff-tunrament-4.onrender.com/');
+}
+
+function sanitizePublicSettingsOutput(settings: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = { ...settings };
+  const textKeys = ['site_name', 'site_tagline', 'site_description', 'footer_text', 'founder_role', 'founder_bio', 'founder_website'];
+  for (const key of textKeys) {
+    if (typeof out[key] === 'string' && out[key]) {
+      out[key] = sanitizeLegacyBrandText(out[key]);
+    }
+  }
+  if (typeof out.support_email === 'string' && /flaxy\.gg/i.test(out.support_email)) {
+    out.support_email = '';
+  }
+  for (const sKey of ['social_instagram', 'social_youtube', 'social_discord', 'social_telegram']) {
+    if (typeof out[sKey] === 'string' && /flaxy/i.test(out[sKey])) {
+      out[sKey] = '';
+    }
+  }
+  return out;
+}
+
+function sanitizePublicPageOutput<T extends Record<string, any>>(page: T): T {
+  if (!page || typeof page !== 'object') return page;
+  return {
+    ...page,
+    title: typeof page.title === 'string' ? sanitizeLegacyBrandText(page.title) : page.title,
+    content: typeof page.content === 'string' ? sanitizeLegacyBrandText(page.content) : page.content,
+    meta_title: typeof page.meta_title === 'string' ? sanitizeLegacyBrandText(page.meta_title) : page.meta_title,
+    meta_description:
+      typeof page.meta_description === 'string'
+        ? sanitizeLegacyBrandText(page.meta_description)
+        : page.meta_description
+  };
+}
+
 export async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
   const body = options.body ? JSON.parse(String(options.body)) : {};
@@ -147,14 +188,14 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     try {
       const snap = await getDoc(doc(db, 'settings', 'public'));
       if (!snap.exists()) {
-        return { settings: { ...DEFAULT_SITE_SETTINGS } } as T;
+        return { settings: sanitizePublicSettingsOutput({ ...DEFAULT_SITE_SETTINGS }) } as T;
       }
       const data = snap.data();
       const merged: Record<string, string> = { ...DEFAULT_SITE_SETTINGS };
       for (const k of Object.keys(DEFAULT_SITE_SETTINGS)) {
         if (typeof data[k] === 'string') merged[k] = data[k];
       }
-      return { settings: merged } as T;
+      return { settings: sanitizePublicSettingsOutput(merged) } as T;
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, p);
     }
@@ -652,7 +693,8 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
         ? collection(db, 'website_pages')
         : query(collection(db, 'website_pages'), where('is_published', '==', 1));
       const snap = await getDocs(q);
-      const pages = (snap.empty && !isStaffRole(role) ? DEFAULT_PAGES : snap.docs.map(serializeDoc)).sort(
+      const rawPages = snap.empty && !isStaffRole(role) ? DEFAULT_PAGES : snap.docs.map(serializeDoc);
+      const pages = (isStaffRole(role) ? rawPages : rawPages.map(sanitizePublicPageOutput)).sort(
         (a, b) => String(a.title).localeCompare(String(b.title))
       );
       return { pages } as T;
@@ -667,10 +709,10 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     try {
       const snap = await getDocs(query(collection(db, 'website_pages'), where('slug', '==', slug), where('is_published', '==', 1)));
       if (!snap.empty) {
-        return { page: serializeDoc(snap.docs[0]) } as T;
+        return { page: sanitizePublicPageOutput(serializeDoc(snap.docs[0])) } as T;
       }
       const fallback = DEFAULT_PAGES.find((p) => p.slug === slug);
-      if (fallback) return { page: fallback } as T;
+      if (fallback) return { page: sanitizePublicPageOutput(fallback) } as T;
       throw new Error('Page not found.');
     } catch (err) {
       handleFirestoreError(err, OperationType.LIST, 'website_pages');

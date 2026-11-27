@@ -66,9 +66,9 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = () => {
                     className="w-16 h-16 rounded-2xl object-cover mx-auto border border-slate-200 dark:border-slate-700"
                   />
                   <div>
-                    <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white truncate">
+                    <h2 className="font-gaming font-bold text-lg text-slate-900 dark:text-white truncate">
                       {p.free_fire_ign || p.player_name}
-                    </h3>
+                    </h2>
                     <div className="text-xs text-slate-500 truncate">{p.player_name}</div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">

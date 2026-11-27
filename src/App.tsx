@@ -17,7 +17,7 @@ import { DashboardView } from './views/DashboardView.js';
 import { AdminPanelView } from './views/admin/AdminPanelView.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { apiRequest } from './lib/api.js';
-import { applyPublicPageSeo } from './lib/seo.js';
+import { applyPublicPageSeo, syncEntityGraphJsonLd } from './lib/seo.js';
 
 function MainApp() {
   const { user } = useAuth();
@@ -32,6 +32,12 @@ function MainApp() {
       apiRequest<{ settings: Record<string, string> }>('/settings/public')
         .then(res => {
           if (res.settings) {
+            syncEntityGraphJsonLd({
+              founderImageUrl: res.settings.founder_photo_url,
+              siteLogoUrl: res.settings.site_logo,
+              linkedinUrl: res.settings.founder_linkedin,
+              githubUrl: res.settings.founder_github
+            });
             try {
               localStorage.setItem('flaxy_site_settings', JSON.stringify(res.settings));
             } catch {}

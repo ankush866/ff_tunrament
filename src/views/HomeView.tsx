@@ -359,7 +359,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAuth }) =>
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-start gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Fair Play Arena</h3>
+              <h2 className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Fair Play Arena</h2>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Mobile-only lobbies. Verified players &amp; anti-cheat checks.</p>
             </div>
           </div>
@@ -367,7 +367,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAuth }) =>
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-start gap-3">
             <Zap className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Fast UPI &amp; Rooms</h3>
+              <h2 className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Fast UPI &amp; Rooms</h2>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Quick UPI approval and automatic Room ID &amp; Password unlock.</p>
             </div>
           </div>
@@ -379,7 +379,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAuth }) =>
           >
             <HelpCircle className="w-5 h-5 text-cyan-500 shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Need Help? →</h3>
+              <h2 className="font-gaming font-bold text-sm text-slate-900 dark:text-white">Need Help? →</h2>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Read rules, payment guide &amp; FAQs or open a support ticket.</p>
             </div>
           </button>

@@ -12,40 +12,53 @@
     <meta property="og:description" content="Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Vlexa" />
-    <meta property="og:url" content="https://vlexa.free.nf/" />
+    <meta property="og:url" content="https://ff-tunrament-4.onrender.com/" />
+    <meta property="og:image" content="https://ff-tunrament-4.onrender.com/vlexa-logo.svg" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Vlexa – Free Fire Tournament Platform" />
     <meta name="twitter:description" content="Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar." />
-    <script type="application/ld+json">
+    <meta name="twitter:image" content="https://ff-tunrament-4.onrender.com/vlexa-logo.svg" />
+    <script id="vlexa-entity-jsonld" type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@graph": [
           {
-            "@type": "WebSite",
-            "@id": "https://vlexa.free.nf/#website",
+            "@type": "Organization",
+            "@id": "https://ff-tunrament-4.onrender.com/#organization",
             "name": "Vlexa",
-            "alternateName": "Vlexa – Free Fire Tournament Platform",
-            "url": "https://vlexa.free.nf/",
+            "url": "https://ff-tunrament-4.onrender.com/",
             "description": "Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.",
-            "creator": {
-              "@id": "https://vlexa.free.nf/about#founder"
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://ff-tunrament-4.onrender.com/vlexa-logo.svg"
             },
+            "founder": {
+              "@id": "https://ff-tunrament-4.onrender.com/about#founder"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://ff-tunrament-4.onrender.com/#website",
+            "name": "Vlexa",
+            "url": "https://ff-tunrament-4.onrender.com/",
+            "description": "Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.",
             "publisher": {
-              "@id": "https://vlexa.free.nf/about#founder"
+              "@id": "https://ff-tunrament-4.onrender.com/#organization"
+            },
+            "creator": {
+              "@id": "https://ff-tunrament-4.onrender.com/about#founder"
             }
           },
           {
             "@type": "Person",
-            "@id": "https://vlexa.free.nf/about#founder",
+            "@id": "https://ff-tunrament-4.onrender.com/about#founder",
             "name": "Ankush Kumar",
-            "jobTitle": "Founder & Developer of Vlexa",
+            "jobTitle": "Founder & Developer",
             "description": "Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.",
-            "url": "https://vlexa.free.nf/about",
-            "mainEntityOfPage": "https://vlexa.free.nf/about",
+            "url": "https://ff-tunrament-4.onrender.com/about",
+            "mainEntityOfPage": "https://ff-tunrament-4.onrender.com/about",
             "worksFor": {
-              "@type": "Organization",
-              "name": "Vlexa",
-              "url": "https://vlexa.free.nf/"
+              "@id": "https://ff-tunrament-4.onrender.com/#organization"
             },
             "knowsAbout": [
               "Full-Stack Web Development",
@@ -54,8 +67,7 @@
             ],
             "sameAs": [
               "https://www.linkedin.com/in/ankush-sharma-4a9911414/",
-              "https://github.com/ankush866",
-              "https://vlexa.free.nf"
+              "https://github.com/ankush866"
             ]
           }
         ]

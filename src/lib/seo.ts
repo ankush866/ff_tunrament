@@ -1,8 +1,13 @@
 import { formatINR, formatISTDateTime } from './api.js';
-import { DEFAULT_MATCH_BANNER, getSafeImageUrl } from './assets.js';
+import { DEFAULT_MATCH_BANNER, getSafeImageUrl, normalizeImageUrl } from './assets.js';
 
-export const DEFAULT_SITE_URL = 'https://vlexa.free.nf';
-export const CANONICAL_SITE_URL = 'https://ff-tunrament-4.onrender.com';
+export const DEFAULT_SITE_URL = 'https://ff-tunrament-4.onrender.com';
+export const CANONICAL_SITE_URL = DEFAULT_SITE_URL;
+export const ORGANIZATION_ID = `${DEFAULT_SITE_URL}/#organization`;
+export const WEBSITE_ID = `${DEFAULT_SITE_URL}/#website`;
+export const FOUNDER_ID = `${DEFAULT_SITE_URL}/about#founder`;
+export const DEFAULT_LOGO_URL = `${DEFAULT_SITE_URL}/vlexa-logo.svg`;
+
 export const DEFAULT_SEO_TITLE = 'Vlexa – Free Fire Tournament Platform';
 export const DEFAULT_SEO_DESCRIPTION =
   'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings.';
@@ -23,10 +28,20 @@ export interface TournamentSeoData {
   rules_text?: string;
 }
 
-const JSON_LD_SCRIPT_ID = 'vlexa-tournament-jsonld';
+const ENTITY_GRAPH_SCRIPT_ID = 'vlexa-entity-jsonld';
+const PAGE_JSON_LD_SCRIPT_ID = 'vlexa-page-jsonld';
+const TOURNAMENT_JSON_LD_SCRIPT_ID = 'vlexa-tournament-jsonld';
 
 function getCanonicalOrigin(): string {
   return DEFAULT_SITE_URL;
+}
+
+export function sanitizeVlexaSeoText(text: string): string {
+  return text
+    .replace(/\bFlaxy\s+Esports\s+Tournaments\b/gi, 'Vlexa')
+    .replace(/\bFlaxy\s+Esports\b/gi, 'Vlexa')
+    .replace(/\bFlaxy\b/gi, 'Vlexa')
+    .replace(/https?:\/\/vlexa\.free\.nf\/?/gi, `${DEFAULT_SITE_URL}/`);
 }
 
 function upsertMetaTag(
@@ -44,14 +59,6 @@ function upsertMetaTag(
     document.head.appendChild(el);
   }
   el.setAttribute('content', content);
-}
-
-function removeMetaTag(attrName: 'name' | 'property', attrValue: string): void {
-  if (typeof document === 'undefined') return;
-  const el = document.head.querySelector<HTMLMetaElement>(
-    `meta[${attrName}="${attrValue}"]`
-  );
-  if (el) el.remove();
 }
 
 function upsertCanonical(href: string): void {
@@ -95,6 +102,15 @@ function upsertJsonLd(id: string, payload: Record<string, unknown> | null): void
   script.textContent = JSON.stringify(payload);
 }
 
+function resolveHttpsAssetUrl(rawUrl?: string | null): string | null {
+  const normalized = normalizeImageUrl(rawUrl);
+  if (!normalized || normalized.startsWith('data:')) return null;
+  if (normalized.startsWith('https://')) return normalized;
+  if (normalized.startsWith('http://')) return normalized.replace(/^http:\/\//i, 'https://');
+  if (normalized.startsWith('/')) return `${DEFAULT_SITE_URL}${normalized}`;
+  return null;
+}
+
 function resolveAbsoluteImageUrl(rawBanner?: string | null): string | null {
   if (typeof window === 'undefined') return null;
   const safe = getSafeImageUrl(rawBanner, DEFAULT_MATCH_BANNER);
@@ -105,9 +121,87 @@ function resolveAbsoluteImageUrl(rawBanner?: string | null): string | null {
   return `${origin}/${safe}`;
 }
 
+export function syncEntityGraphJsonLd(options?: {
+  founderImageUrl?: string | null;
+  siteLogoUrl?: string | null;
+  linkedinUrl?: string | null;
+  githubUrl?: string | null;
+}): void {
+  if (typeof document === 'undefined') return;
+
+  const logoUrl = resolveHttpsAssetUrl(options?.siteLogoUrl) || DEFAULT_LOGO_URL;
+  const founderImage = resolveHttpsAssetUrl(options?.founderImageUrl);
+
+  const sameAs = [
+    options?.linkedinUrl || 'https://www.linkedin.com/in/ankush-sharma-4a9911414/',
+    options?.githubUrl || 'https://github.com/ankush866'
+  ].filter((u): u is string => Boolean(u && u.startsWith('https://')));
+
+  const personNode: Record<string, unknown> = {
+    '@type': 'Person',
+    '@id': FOUNDER_ID,
+    name: 'Ankush Kumar',
+    jobTitle: 'Founder & Developer',
+    description:
+      'Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.',
+    url: `${DEFAULT_SITE_URL}/about`,
+    mainEntityOfPage: `${DEFAULT_SITE_URL}/about`,
+    worksFor: {
+      '@id': ORGANIZATION_ID
+    },
+    knowsAbout: [
+      'Full-Stack Web Development',
+      'Free Fire Tournament Management',
+      'Competitive Mobile Esports Platforms'
+    ],
+    sameAs
+  };
+
+  if (founderImage) {
+    personNode.image = founderImage;
+  }
+
+  upsertJsonLd(ENTITY_GRAPH_SCRIPT_ID, {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': ORGANIZATION_ID,
+        name: 'Vlexa',
+        url: `${DEFAULT_SITE_URL}/`,
+        description:
+          'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.',
+        logo: {
+          '@type': 'ImageObject',
+          url: logoUrl
+        },
+        founder: {
+          '@id': FOUNDER_ID
+        }
+      },
+      {
+        '@type': 'WebSite',
+        '@id': WEBSITE_ID,
+        name: 'Vlexa',
+        url: `${DEFAULT_SITE_URL}/`,
+        description:
+          'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.',
+        publisher: {
+          '@id': ORGANIZATION_ID
+        },
+        creator: {
+          '@id': FOUNDER_ID
+        }
+      },
+      personNode
+    ]
+  });
+}
+
 export function applyPublicPageSeo(view: string, params: Record<string, any> = {}): void {
   if (typeof document === 'undefined') return;
   if (view === 'tournament-detail') {
+    upsertJsonLd(PAGE_JSON_LD_SCRIPT_ID, null);
     if (params?.id !== undefined && params?.id !== null && String(params.id).trim() !== '') {
       upsertCanonical(`${CANONICAL_SITE_URL}/tournament/${String(params.id).trim()}`);
     }
@@ -148,6 +242,14 @@ export function applyPublicPageSeo(view: string, params: Record<string, any> = {
   } else if (view === 'page') {
     const slug = String(params.slug || 'privacy-policy');
     const pageMeta: Record<string, { title: string; description: string }> = {
+      'about-us': {
+        title: 'About Vlexa – Free Fire Tournament Platform',
+        description: 'Learn about Vlexa, an independently developed Free Fire Tournament Management Platform.'
+      },
+      'contact-us': {
+        title: 'Contact Support | Vlexa',
+        description: 'Reach Vlexa tournament support via help tickets or official helpline channels.'
+      },
       'privacy-policy': {
         title: 'Privacy Policy | Vlexa',
         description: 'Read how Vlexa handles tournament registration data and player privacy.'
@@ -163,11 +265,19 @@ export function applyPublicPageSeo(view: string, params: Record<string, any> = {
       'tournament-rules': {
         title: 'Tournament Rules & Fair Play | Vlexa',
         description: 'Read official Free Fire mobile tournament rules and fair play policies on Vlexa.'
+      },
+      'fair-play-policy': {
+        title: 'Fair Play & Anti-Cheat Policy | Vlexa',
+        description: 'Review Vlexa fair play standards and zero-tolerance anti-cheat guidelines for Free Fire.'
       }
     };
     const matched = pageMeta[slug];
-    title = matched ? matched.title : `${slug.replace(/-/g, ' ')} | Vlexa`;
-    description = matched ? matched.description : DEFAULT_SEO_DESCRIPTION;
+    const customTitle = params.metaTitle ? sanitizeVlexaSeoText(String(params.metaTitle)).trim() : '';
+    const customDescription = params.metaDescription
+      ? sanitizeVlexaSeoText(String(params.metaDescription)).trim()
+      : '';
+    title = customTitle || (matched ? matched.title : `${slug.replace(/-/g, ' ')} | Vlexa`);
+    description = customDescription || (matched ? matched.description : DEFAULT_SEO_DESCRIPTION);
     path = `/page/${slug}`;
   } else if (view === 'dashboard' || view === 'admin') {
     isPrivate = true;
@@ -186,16 +296,35 @@ export function applyPublicPageSeo(view: string, params: Record<string, any> = {
   upsertMetaTag('property', 'og:title', title);
   upsertMetaTag('property', 'og:description', description);
   upsertMetaTag('property', 'og:url', canonicalUrl);
+  upsertMetaTag('property', 'og:image', DEFAULT_LOGO_URL);
   upsertMetaTag('name', 'twitter:card', 'summary_large_image');
   upsertMetaTag('name', 'twitter:title', title);
   upsertMetaTag('name', 'twitter:description', description);
-
-  const canonicalHref = `${CANONICAL_SITE_URL}${path}`;
+  upsertMetaTag('name', 'twitter:image', DEFAULT_LOGO_URL);
 
   if (!isPrivate) {
-    upsertCanonical(canonicalHref);
+    upsertCanonical(`${CANONICAL_SITE_URL}${path}`);
   } else {
     removeCanonical();
+  }
+
+  if (view === 'about') {
+    upsertJsonLd(PAGE_JSON_LD_SCRIPT_ID, {
+      '@context': 'https://schema.org',
+      '@type': 'ProfilePage',
+      '@id': `${DEFAULT_SITE_URL}/about#profilepage`,
+      url: `${DEFAULT_SITE_URL}/about`,
+      name: 'About Ankush Kumar – Founder & Developer of Vlexa',
+      description,
+      isPartOf: {
+        '@id': WEBSITE_ID
+      },
+      mainEntity: {
+        '@id': FOUNDER_ID
+      }
+    });
+  } else {
+    upsertJsonLd(PAGE_JSON_LD_SCRIPT_ID, null);
   }
 }
 
@@ -252,14 +381,12 @@ export function injectTournamentSeo(
   upsertMetaTag('property', 'og:title', title);
   upsertMetaTag('property', 'og:description', description);
   upsertMetaTag('property', 'og:url', canonicalUrl);
-  if (imageUrl) {
-    upsertMetaTag('property', 'og:image', imageUrl);
-    upsertMetaTag('name', 'twitter:image', imageUrl);
-  }
+  upsertMetaTag('property', 'og:image', imageUrl || DEFAULT_LOGO_URL);
 
   upsertMetaTag('name', 'twitter:card', 'summary_large_image');
   upsertMetaTag('name', 'twitter:title', title);
   upsertMetaTag('name', 'twitter:description', description);
+  upsertMetaTag('name', 'twitter:image', imageUrl || DEFAULT_LOGO_URL);
 
   upsertCanonical(`${CANONICAL_SITE_URL}/tournament/${tournament.id}`);
 
@@ -277,9 +404,7 @@ export function injectTournamentSeo(
     'Registration Open': 'https://schema.org/EventScheduled'
   };
 
-  const origin = getCanonicalOrigin();
-
-  upsertJsonLd(JSON_LD_SCRIPT_ID, {
+  upsertJsonLd(TOURNAMENT_JSON_LD_SCRIPT_ID, {
     '@context': 'https://schema.org',
     '@type': 'SportsEvent',
     name: tournament.title,
@@ -292,11 +417,12 @@ export function injectTournamentSeo(
       '@type': 'VirtualLocation',
       url: canonicalUrl
     },
-    image: imageUrl ? [imageUrl] : undefined,
+    image: imageUrl ? [imageUrl] : [DEFAULT_LOGO_URL],
     organizer: {
       '@type': 'Organization',
+      '@id': ORGANIZATION_ID,
       name: 'Vlexa',
-      url: origin
+      url: `${DEFAULT_SITE_URL}/`
     },
     offers: {
       '@type': 'Offer',
@@ -324,11 +450,12 @@ export function resetDefaultSeo(): void {
   upsertMetaTag('property', 'og:title', DEFAULT_SEO_TITLE);
   upsertMetaTag('property', 'og:description', DEFAULT_SEO_DESCRIPTION);
   upsertMetaTag('property', 'og:url', `${origin}/`);
-  removeMetaTag('property', 'og:image');
+  upsertMetaTag('property', 'og:image', DEFAULT_LOGO_URL);
   upsertMetaTag('name', 'twitter:card', 'summary_large_image');
   upsertMetaTag('name', 'twitter:title', DEFAULT_SEO_TITLE);
   upsertMetaTag('name', 'twitter:description', DEFAULT_SEO_DESCRIPTION);
-  removeMetaTag('name', 'twitter:image');
+  upsertMetaTag('name', 'twitter:image', DEFAULT_LOGO_URL);
   upsertCanonical(`${CANONICAL_SITE_URL}/`);
-  upsertJsonLd(JSON_LD_SCRIPT_ID, null);
+  upsertJsonLd(TOURNAMENT_JSON_LD_SCRIPT_ID, null);
+  upsertJsonLd(PAGE_JSON_LD_SCRIPT_ID, null);
 }

@@ -1,11 +1,13 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import cors from 'cors';
 import { fileURLToPath } from 'node:url';
 import { initDatabase, db } from './src/server/db.js';
 import { authenticateUser } from './src/server/auth.js';
 import { apiRouter } from './src/server/routes.js';
+import { applyServerSeoToHtml } from './src/server/seoHtml.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,9 +29,9 @@ async function startServer() {
   app.set('trust proxy', 1);
   app.use(cors());
 
-  // Dynamic Sitemap.xml Generator (public crawlable routes only on canonical Vlexa domain, before auth middleware)
+  // Dynamic Sitemap.xml Generator (public crawlable routes only on official Render domain, before auth middleware)
   app.get('/sitemap.xml', async (_req: Request, res: Response) => {
-    const baseUrl = 'https://vlexa.free.nf';
+    const baseUrl = 'https://ff-tunrament-4.onrender.com';
     const defaultLastMod = '2026-11-21';
     const publicPaths = [
       { loc: '/', changefreq: 'daily', priority: '1.0' },
@@ -83,34 +85,44 @@ async function startServer() {
       .send(xml);
   });
 
-  // Robots.txt (before auth middleware)
+  // Robots.txt (reads public/robots.txt directly so static file and server response always match)
   app.get('/robots.txt', (_req: Request, res: Response) => {
+    const publicRobotsPath = path.resolve(__dirname, 'public', 'robots.txt');
+    const fallbackRobots = [
+      'User-agent: Googlebot',
+      'Allow: /',
+      'Disallow: /admin',
+      'Disallow: /dashboard',
+      'Disallow: /wallet',
+      'Disallow: /api',
+      'Disallow: /login',
+      '',
+      'User-agent: *',
+      'Allow: /',
+      'Disallow: /admin',
+      'Disallow: /dashboard',
+      'Disallow: /wallet',
+      'Disallow: /api',
+      'Disallow: /login',
+      '',
+      'Sitemap: https://ff-tunrament-4.onrender.com/sitemap.xml',
+      ''
+    ].join('\n');
+
+    let robotsBody = fallbackRobots;
+    try {
+      if (fs.existsSync(publicRobotsPath)) {
+        robotsBody = fs.readFileSync(publicRobotsPath, 'utf-8');
+      }
+    } catch {
+      robotsBody = fallbackRobots;
+    }
+
     res
       .status(200)
       .setHeader('Content-Type', 'text/plain; charset=utf-8')
       .setHeader('Cache-Control', 'public, max-age=3600')
-      .send(
-        [
-          'User-agent: Googlebot',
-          'Allow: /',
-          'Disallow: /admin',
-          'Disallow: /dashboard',
-          'Disallow: /wallet',
-          'Disallow: /api',
-          'Disallow: /login',
-          '',
-          'User-agent: *',
-          'Allow: /',
-          'Disallow: /admin',
-          'Disallow: /dashboard',
-          'Disallow: /wallet',
-          'Disallow: /api',
-          'Disallow: /login',
-          '',
-          'Sitemap: https://vlexa.free.nf/sitemap.xml',
-          ''
-        ].join('\n')
-      );
+      .send(robotsBody);
   });
 
   // Google Search Console Verification File (before auth middleware)
@@ -141,8 +153,26 @@ async function startServer() {
   // Mount API Router
   app.use('/api', apiRouter);
 
+  const isHtmlRouteRequest = (req: Request): boolean => {
+    if (req.method !== 'GET') return false;
+    const p = req.path || '/';
+    if (
+      p.startsWith('/api') ||
+      p.startsWith('/@') ||
+      p.startsWith('/src/') ||
+      p.startsWith('/node_modules/') ||
+      p.startsWith('/assets/')
+    ) {
+      return false;
+    }
+    if (/\.[a-zA-Z0-9]{1,8}$/.test(p)) {
+      return false;
+    }
+    return true;
+  };
+
   if (!isProd) {
-    // Development mode with Vite Middleware
+    // Development mode with Vite Middleware + route-aware crawler HTML injection
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
@@ -150,14 +180,36 @@ async function startServer() {
         host: '0.0.0.0',
         port: PORT
       },
-      appType: 'spa'
+      appType: 'custom'
     });
     app.use(vite.middlewares);
+    app.get('*', async (req: Request, res: Response, next) => {
+      if (!isHtmlRouteRequest(req)) return next();
+      try {
+        const rawHtml = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
+        const transformed = await vite.transformIndexHtml(req.originalUrl, rawHtml);
+        const seoHtml = applyServerSeoToHtml(transformed, req.path);
+        res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').send(seoHtml);
+      } catch (err) {
+        next(err);
+      }
+    });
   } else {
-    // Production mode
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    // Production mode (index: false so `/` also receives route-specific SEO & crawler HTML)
+    const distDir = path.resolve(__dirname, 'dist');
+    const distIndexPath = path.resolve(distDir, 'index.html');
+    const distTemplate = fs.existsSync(distIndexPath) ? fs.readFileSync(distIndexPath, 'utf-8') : '';
+
+    app.use(express.static(distDir, { index: false }));
     app.get('*', (req: Request, res: Response) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      const template =
+        distTemplate || (fs.existsSync(distIndexPath) ? fs.readFileSync(distIndexPath, 'utf-8') : '');
+      if (!template) {
+        res.status(404).send('Build output not found.');
+        return;
+      }
+      const seoHtml = applyServerSeoToHtml(template, req.path);
+      res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').send(seoHtml);
     });
   }
 
@@ -170,7 +222,7 @@ async function startServer() {
   });
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Flaxy Free Fire Tournament Server running on http://0.0.0.0:${PORT}`);
+    console.log(`🚀 Vlexa Free Fire Tournament Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

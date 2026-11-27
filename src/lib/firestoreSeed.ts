@@ -2,17 +2,17 @@ import { doc, getDoc, getDocs, collection, writeBatch, serverTimestamp, Timestam
 import { db } from './firebase.js';
 
 export const DEFAULT_SITE_SETTINGS: Record<string, string> = {
-  site_name: 'FLAXY ESPORTS TOURNAMENTS',
+  site_name: 'Vlexa',
   upi_id: 'flaxy.esports@icici',
   whatsapp_number: '+91 99999 88888',
   whatsapp_url: 'https://wa.me/919999988888',
-  support_email: 'official@flaxy.gg',
+  support_email: '',
   contact_phone: '+91 98765 43210',
   payment_qr_url:
     'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3Dflaxy.esports%40icici%26pn%3DFlaxy%2520Esports%26cu%3DINR',
-  site_tagline: "India's Premier Free Fire Tournament & Esports Arena",
+  site_tagline: 'Vlexa – Free Fire Tournament Management Platform',
   site_description:
-    'Join daily Free Fire Solo and Duo tournaments on Flaxy. Fast room scheduling, verified UPI payouts, real-time leaderboard and fair play.',
+    'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings.',
   site_logo: '',
   default_timezone: 'Asia/Kolkata',
   maintenance_mode: 'false',
@@ -23,11 +23,11 @@ export const DEFAULT_SITE_SETTINGS: Record<string, string> = {
   scoring_rules:
     '{"placement_points":{"1":12,"2":9,"3":8,"4":7,"5":6,"6":5,"7":4,"8":3,"9":2,"10":1},"kill_point":1}',
   footer_text:
-    '© 2026 FLAXY ESPORTS. All rights reserved. Free Fire is a registered trademark of Garena. Independent esports tournament organizer.',
-  social_instagram: 'https://instagram.com/flaxy_esports',
-  social_youtube: 'https://youtube.com/@flaxyesports',
-  social_discord: 'https://discord.gg/flaxy',
-  social_telegram: 'https://t.me/flaxyesports',
+    '© 2026 Vlexa. All rights reserved. Founded & Developed by Ankush Kumar. Free Fire is a registered trademark of Garena.',
+  social_instagram: '',
+  social_youtube: '',
+  social_discord: '',
+  social_telegram: '',
   founder_name: 'Ankush Kumar',
   founder_role: 'Founder & Developer of Vlexa',
   founder_profession: 'Self-taught Aspiring Full-Stack Developer',
@@ -36,7 +36,7 @@ export const DEFAULT_SITE_SETTINGS: Record<string, string> = {
   founder_photo_url: '',
   founder_linkedin: 'https://www.linkedin.com/in/ankush-sharma-4a9911414/',
   founder_github: 'https://github.com/ankush866',
-  founder_website: 'https://vlexa.free.nf'
+  founder_website: 'https://ff-tunrament-4.onrender.com/'
 };
 
 const nowPlusHours = (h: number) => new Date(Date.now() + h * 3600000).toISOString();
@@ -164,7 +164,7 @@ export const DEFAULT_FAQS = [
     id: '3',
     category: 'Rules & Devices',
     question: 'Are PC or laptop emulators allowed?',
-    answer: 'No. All Flaxy tournaments are strictly mobile-only (Android / iOS).',
+    answer: 'No. All Vlexa tournaments are strictly mobile-only (Android / iOS).',
     sort_order: 3,
     is_published: 1
   },
@@ -217,9 +217,9 @@ export const DEFAULT_PAGES = [
     id: '1',
     title: 'About Us',
     slug: 'about-us',
-    content: '<h2>Welcome to Flaxy Esports</h2><p>Flaxy Esports is India\'s trusted Free Fire tournament platform with instant UPI rewards and fair play enforcement.</p>',
-    meta_title: 'About Flaxy Esports',
-    meta_description: 'About Flaxy Free Fire competitive tournament arena.',
+    content: '<h2>Welcome to Vlexa</h2><p>Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.</p>',
+    meta_title: 'About Vlexa – Free Fire Tournament Platform',
+    meta_description: 'About Vlexa, an independently developed Free Fire competitive tournament platform.',
     is_published: 1,
     is_system: 1,
     version: 1
@@ -228,9 +228,9 @@ export const DEFAULT_PAGES = [
     id: '2',
     title: 'Contact Us',
     slug: 'contact-us',
-    content: '<h2>Contact Support</h2><p>Reach us via Support Tickets inside your dashboard or WhatsApp helpline.</p>',
-    meta_title: 'Contact Flaxy Esports',
-    meta_description: 'Contact support for Flaxy tournaments.',
+    content: '<h2>Contact Support</h2><p>Reach Vlexa support via Support Tickets inside your dashboard or WhatsApp helpline.</p>',
+    meta_title: 'Contact Support | Vlexa',
+    meta_description: 'Contact support for Vlexa tournaments.',
     is_published: 1,
     is_system: 1,
     version: 1
@@ -239,9 +239,9 @@ export const DEFAULT_PAGES = [
     id: '3',
     title: 'Privacy Policy',
     slug: 'privacy-policy',
-    content: '<h2>Privacy Policy</h2><p>Your account info and UPI receipts are protected under Firebase security rules and used only for tournament verification.</p>',
-    meta_title: 'Privacy Policy - Flaxy Esports',
-    meta_description: 'Flaxy privacy policy.',
+    content: '<h2>Privacy Policy</h2><p>Your Vlexa account info and UPI receipts are protected under security rules and used only for tournament verification.</p>',
+    meta_title: 'Privacy Policy | Vlexa',
+    meta_description: 'Read how Vlexa handles tournament registration data and player privacy.',
     is_published: 1,
     is_system: 1,
     version: 1
@@ -250,9 +250,9 @@ export const DEFAULT_PAGES = [
     id: '4',
     title: 'Terms & Conditions',
     slug: 'terms-and-conditions',
-    content: '<h2>Terms & Conditions</h2><p>Slots are confirmed after Admin UPI verification. Sharing Room IDs with non-participants leads to disqualification.</p>',
-    meta_title: 'Terms & Conditions - Flaxy Esports',
-    meta_description: 'Flaxy terms and conditions.',
+    content: '<h2>Terms & Conditions</h2><p>Slots are confirmed after Admin UPI verification on Vlexa. Sharing Room IDs with non-participants leads to disqualification.</p>',
+    meta_title: 'Terms & Conditions | Vlexa',
+    meta_description: 'Review official platform terms and conditions for participating on Vlexa.',
     is_published: 1,
     is_system: 1,
     version: 1
@@ -261,9 +261,9 @@ export const DEFAULT_PAGES = [
     id: '5',
     title: 'Refund Policy',
     slug: 'refund-policy',
-    content: '<h2>Refund Policy</h2><p>Full refunds are issued within 24 hours if a match is cancelled by organizers.</p>',
-    meta_title: 'Refund Policy - Flaxy Esports',
-    meta_description: 'Flaxy refund policy.',
+    content: '<h2>Refund Policy</h2><p>Full refunds are issued within 24 hours if a match is cancelled by Vlexa organizers.</p>',
+    meta_title: 'Refund Policy | Vlexa',
+    meta_description: 'Understand match cancellation and entry fee refund guidelines on Vlexa.',
     is_published: 1,
     is_system: 1,
     version: 1
@@ -273,8 +273,8 @@ export const DEFAULT_PAGES = [
     title: 'Tournament Rules',
     slug: 'tournament-rules',
     content: '<h2>Official Free Fire Rules</h2><ul><li>1st Place (Booyah): 12 pts, 2nd: 9 pts, 3rd: 8 pts + 1 pt/kill.</li><li>Mobile only. No emulators or scripts.</li></ul>',
-    meta_title: 'Tournament Rules - Flaxy Esports',
-    meta_description: 'Official Free Fire scoring and anti-cheat rules.',
+    meta_title: 'Tournament Rules & Fair Play | Vlexa',
+    meta_description: 'Read official Free Fire mobile tournament rules and fair play policies on Vlexa.',
     is_published: 1,
     is_system: 1,
     version: 1
@@ -283,9 +283,9 @@ export const DEFAULT_PAGES = [
     id: '7',
     title: 'Fair Play Policy',
     slug: 'fair-play-policy',
-    content: '<h2>Fair Play & Anti-Cheat</h2><p>Strict zero-tolerance policy against aimbots, wallhacks, teaming, and PC emulators.</p>',
-    meta_title: 'Fair Play Policy - Flaxy Esports',
-    meta_description: 'Anti-cheat guidelines for Free Fire.',
+    content: '<h2>Fair Play & Anti-Cheat</h2><p>Vlexa enforces a strict zero-tolerance policy against aimbots, wallhacks, teaming, and PC emulators.</p>',
+    meta_title: 'Fair Play & Anti-Cheat Policy | Vlexa',
+    meta_description: 'Review Vlexa fair play standards and zero-tolerance anti-cheat guidelines for Free Fire.',
     is_published: 1,
     is_system: 1,
     version: 1

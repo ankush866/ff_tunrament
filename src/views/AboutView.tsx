@@ -3,6 +3,7 @@ import { ArrowLeft, Code2, ExternalLink, Globe, ShieldCheck, Trophy, User } from
 import { apiRequest } from '../lib/api.js';
 import { normalizeImageUrl } from '../lib/assets.js';
 import { DEFAULT_SITE_SETTINGS } from '../lib/firestoreSeed.js';
+import { syncEntityGraphJsonLd } from '../lib/seo.js';
 
 interface AboutViewProps {
   onNavigate: (view: string, params?: any) => void;
@@ -32,6 +33,12 @@ export const AboutView: React.FC<AboutViewProps> = ({ onNavigate }) => {
           if (res.settings) {
             setSettings(res.settings);
             setPhotoError(false);
+            syncEntityGraphJsonLd({
+              founderImageUrl: res.settings.founder_photo_url,
+              siteLogoUrl: res.settings.site_logo,
+              linkedinUrl: res.settings.founder_linkedin,
+              githubUrl: res.settings.founder_github
+            });
             try {
               localStorage.setItem('flaxy_site_settings', JSON.stringify(res.settings));
             } catch {}

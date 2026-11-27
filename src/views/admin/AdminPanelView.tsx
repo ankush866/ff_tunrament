@@ -2290,7 +2290,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                         type="text"
                         value={settings.founder_website || ''}
                         onChange={e => setSettings(prev => ({ ...prev, founder_website: e.target.value }))}
-                        placeholder="https://vlexa.free.nf"
+                        placeholder="https://ff-tunrament-4.onrender.com/"
                         className={inputCls}
                       />
                     </div>

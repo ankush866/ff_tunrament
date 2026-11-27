@@ -100,7 +100,7 @@ export const FaqView: React.FC<FaqViewProps> = ({ onNavigate }) => {
 
       <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
-          <h3 className="font-gaming font-bold text-base text-slate-900 dark:text-white">Still need help?</h3>
+          <h2 className="font-gaming font-bold text-base text-slate-900 dark:text-white">Still need help?</h2>
           <p className="text-xs text-slate-600 dark:text-slate-400">Open a support ticket directly from your profile.</p>
         </div>
         <button

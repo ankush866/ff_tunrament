@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, onOpenA
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [siteName, setSiteName] = useState('FLAXY ESPORTS');
+  const [siteName, setSiteName] = useState('Vlexa');
 
   useEffect(() => {
     apiRequest<{ announcements: any[] }>('/announcements')

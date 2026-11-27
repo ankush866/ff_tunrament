@@ -137,7 +137,7 @@ async function resolveOrCreateUserProfile(
       await setDoc(doc(db, 'notifications', notifId), {
         id: notifId,
         user_id: uid,
-        title: 'Welcome to Flaxy Esports!',
+        title: 'Welcome to Vlexa!',
         message: 'Your Firebase-backed warrior account is ready. Complete your Free Fire IGN/UID in Profile and join live matches.',
         type: 'system',
         is_read: 0,
