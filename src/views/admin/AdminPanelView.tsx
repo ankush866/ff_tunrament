@@ -29,12 +29,15 @@ import {
   User,
   Share2,
   Send,
-  Trash
+  Trash,
+  ArrowLeft,
+  Search,
+  Award
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext.js';
 import { apiRequest, formatINR, formatISTDateTime } from '../../lib/api.js';
-import { normalizeImageUrl, DEFAULT_MATCH_BANNER, getSafeImageUrl } from '../../lib/assets.js';
+import { normalizeImageUrl, DEFAULT_MATCH_BANNER, DEFAULT_PLAYER_AVATAR, getSafeImageUrl } from '../../lib/assets.js';
 import { compressImageDataUrl } from '../../lib/firebase.js';
 import { SpringActionButton, type SaveStatus } from '../../components/SpringActionButton.js';
 
@@ -83,6 +86,19 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   // Results Entry
   const [selectedTournamentForResults, setSelectedTournamentForResults] = useState<any>(null);
   const [resultsEntries, setResultsEntries] = useState<any[]>([]);
+  const [resultsTabParticipants, setResultsTabParticipants] = useState<any[]>([]);
+
+  // Per-Match Inspector & Rank Assignment
+  const [inspectedMatch, setInspectedMatch] = useState<any>(null);
+  const [matchParticipants, setMatchParticipants] = useState<any[]>([]);
+  const [matchSummary, setMatchSummary] = useState<any>(null);
+  const [loadingMatchDetails, setLoadingMatchDetails] = useState(false);
+  const [matchInspectorTab, setMatchInspectorTab] = useState<'players' | 'ranks'>('players');
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantStatusFilter, setParticipantStatusFilter] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  const [inspectorResultsEntries, setInspectorResultsEntries] = useState<any[]>([]);
+  const [inspectorResultsSaveStatus, setInspectorResultsSaveStatus] = useState<SaveStatus>('idle');
+  const [inspectorMatchStatus, setInspectorMatchStatus] = useState<string>('Completed');
 
   // CMS Pages
   const [pages, setPages] = useState<any[]>([]);
@@ -311,6 +327,113 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     }
   };
 
+  const openMatchInspector = async (t: any, initialTab: 'players' | 'ranks' = 'players') => {
+    setInspectedMatch(t);
+    setMatchInspectorTab(initialTab);
+    setParticipantSearch('');
+    setParticipantStatusFilter('all');
+    setLoadingMatchDetails(true);
+    setInspectorMatchStatus(t.status === 'Cancelled' ? 'Cancelled' : 'Completed');
+    try {
+      const res = await apiRequest<{
+        tournament: any;
+        participants: any[];
+        results: any[];
+        summary: any;
+      }>(`/admin/tournaments/${t.id}/participants`);
+      if (res.tournament) setInspectedMatch(res.tournament);
+      setMatchParticipants(res.participants || []);
+      setMatchSummary(res.summary || null);
+      if (res.results && res.results.length > 0) {
+        setInspectorResultsEntries(
+          res.results.map(r => ({
+            rank: Number(r.rank || 1),
+            user_id: r.user_id || '',
+            player_name: r.player_name || '',
+            kills: Number(r.kills || 0),
+            placement_points: Number(r.placement_points || 0),
+            prize_amount: Number(r.prize_amount || 0),
+            notes: r.notes || ''
+          }))
+        );
+      } else {
+        const prizePool = Number((res.tournament || t).prize_pool || 0);
+        setInspectorResultsEntries([
+          { rank: 1, user_id: '', player_name: '', kills: 0, placement_points: 12, prize_amount: Math.round(prizePool * 0.5), notes: '' },
+          { rank: 2, user_id: '', player_name: '', kills: 0, placement_points: 9, prize_amount: Math.round(prizePool * 0.3), notes: '' },
+          { rank: 3, user_id: '', player_name: '', kills: 0, placement_points: 8, prize_amount: Math.round(prizePool * 0.2), notes: '' }
+        ]);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to load match details.');
+    } finally {
+      setLoadingMatchDetails(false);
+    }
+  };
+
+  const getDefaultPlacementPoints = (rank: number) => {
+    const table: Record<number, number> = { 1: 12, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1 };
+    return table[rank] ?? 0;
+  };
+
+  const handleAssignRankToParticipant = (participant: any) => {
+    setInspectorResultsEntries(prev => {
+      const existingIdx = prev.findIndex(
+        r => (r.user_id && r.user_id === participant.user_id) ||
+             (String(r.player_name || '').trim().toLowerCase() === String(participant.free_fire_ign || '').trim().toLowerCase())
+      );
+      if (existingIdx >= 0) return prev;
+      const blankIdx = prev.findIndex(r => !String(r.player_name || '').trim() && !String(r.user_id || '').trim());
+      if (blankIdx >= 0) {
+        const next = [...prev];
+        next[blankIdx] = {
+          ...next[blankIdx],
+          user_id: participant.user_id || '',
+          player_name: participant.free_fire_ign || participant.username || 'Player'
+        };
+        return next;
+      }
+      const nextRank = prev.length + 1;
+      return [
+        ...prev,
+        {
+          rank: nextRank,
+          user_id: participant.user_id || '',
+          player_name: participant.free_fire_ign || participant.username || 'Player',
+          kills: 0,
+          placement_points: getDefaultPlacementPoints(nextRank),
+          prize_amount: 0,
+          notes: ''
+        }
+      ];
+    });
+    setMatchInspectorTab('ranks');
+  };
+
+  const handleSaveInspectorResults = async () => {
+    if (!inspectedMatch) return;
+    setInspectorResultsSaveStatus('loading');
+    try {
+      await apiRequest(`/admin/results/${inspectedMatch.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          entries: inspectorResultsEntries,
+          tournament_status: inspectorMatchStatus
+        })
+      });
+      setInspectorResultsSaveStatus('success');
+      confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+      const refreshed = await apiRequest<{ tournaments: any[] }>('/tournaments');
+      setTournaments(refreshed.tournaments || []);
+      await openMatchInspector(inspectedMatch, 'ranks');
+      window.dispatchEvent(new Event('flaxy_tournaments_updated'));
+      setTimeout(() => setInspectorResultsSaveStatus('idle'), 2800);
+    } catch (err: any) {
+      setInspectorResultsSaveStatus('idle');
+      alert(err.message);
+    }
+  };
+
   const handleVerifyPayment = async (paymentId: string | number, status: 'approved' | 'rejected', reason = '') => {
     if (status === 'rejected') setRejectSaveStatus('loading');
     try {
@@ -325,8 +448,13 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
       }
       setRejectModalPayment(null);
       setRejectionReason('');
-      apiRequest<{ payments: any[] }>(`/admin/payments?status=${paymentFilter}`)
-        .then(res => setPayments(res.payments || []));
+      if (primaryTab === 'payments') {
+        apiRequest<{ payments: any[] }>(`/admin/payments?status=${paymentFilter}`)
+          .then(res => setPayments(res.payments || []));
+      }
+      if (inspectedMatch) {
+        await openMatchInspector(inspectedMatch, matchInspectorTab);
+      }
       fetchStats();
     } catch (err: any) {
       setRejectSaveStatus('idle');
@@ -337,14 +465,18 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
   const handleSelectTournamentForResults = async (t: any) => {
     setSelectedTournamentForResults(t);
     try {
-      const res = await apiRequest<{ results: any[] }>(`/results/tournament/${t.id}`);
+      const [res, partRes] = await Promise.all([
+        apiRequest<{ results: any[] }>(`/results/tournament/${t.id}`),
+        apiRequest<{ participants: any[] }>(`/admin/tournaments/${t.id}/participants`).catch(() => ({ participants: [] }))
+      ]);
+      setResultsTabParticipants(partRes.participants || []);
       if (res.results && res.results.length > 0) {
         setResultsEntries(res.results);
       } else {
         setResultsEntries([
-          { rank: 1, player_name: '', kills: 10, placement_points: 12, prize_amount: Math.round(t.prize_pool * 0.5) },
-          { rank: 2, player_name: '', kills: 6, placement_points: 9, prize_amount: Math.round(t.prize_pool * 0.3) },
-          { rank: 3, player_name: '', kills: 4, placement_points: 8, prize_amount: Math.round(t.prize_pool * 0.2) }
+          { rank: 1, user_id: '', player_name: '', kills: 0, placement_points: 12, prize_amount: Math.round(t.prize_pool * 0.5) },
+          { rank: 2, user_id: '', player_name: '', kills: 0, placement_points: 9, prize_amount: Math.round(t.prize_pool * 0.3) },
+          { rank: 3, user_id: '', player_name: '', kills: 0, placement_points: 8, prize_amount: Math.round(t.prize_pool * 0.2) }
         ]);
       }
     } catch {}
@@ -356,10 +488,13 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
     try {
       await apiRequest(`/admin/results/${selectedTournamentForResults.id}`, {
         method: 'POST',
-        body: JSON.stringify({ entries: resultsEntries })
+        body: JSON.stringify({ entries: resultsEntries, tournament_status: 'Completed' })
       });
       setResultsSaveStatus('success');
       confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+      const refreshed = await apiRequest<{ tournaments: any[] }>('/tournaments');
+      setTournaments(refreshed.tournaments || []);
+      window.dispatchEvent(new Event('flaxy_tournaments_updated'));
       setTimeout(() => setResultsSaveStatus('idle'), 2800);
     } catch (err: any) {
       setResultsSaveStatus('idle');
@@ -1140,79 +1275,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               ))}
             </div>
           )}
-
-          {viewingScreenshot && (
-            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4">
-              <div className="relative max-w-lg w-full max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-                <div className="shrink-0 flex justify-between items-center px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-                  <span className="font-gaming font-bold text-sm text-slate-900 dark:text-white">
-                    Payment Receipt Screenshot
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setViewingScreenshot(null)}
-                    className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-4 text-center">
-                  <img src={viewingScreenshot} alt="Receipt" className="max-h-[70dvh] mx-auto rounded-xl object-contain" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {rejectModalPayment && (
-            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
-              <div className="w-full max-w-md max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-                <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
-                  <h4 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
-                    REJECT PAYMENT
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={() => { setRejectModalPayment(null); setRejectSaveStatus('idle'); }}
-                    className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-5 space-y-3">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Enter reason for declining this UPI payment.
-                  </p>
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder="e.g. UTR not found or wrong amount"
-                    value={rejectionReason}
-                    onChange={e => setRejectionReason(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-                <div className="shrink-0 px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => { setRejectModalPayment(null); setRejectSaveStatus('idle'); }}
-                    className="flex-1 min-h-[46px] px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <SpringActionButton
-                    type="button"
-                    variant="danger"
-                    status={rejectSaveStatus}
-                    onClick={() => handleVerifyPayment(rejectModalPayment.id, 'rejected', rejectionReason)}
-                    idleLabel="Confirm Reject"
-                    loadingLabel="Rejecting..."
-                    successLabel="Rejected!"
-                    className="flex-[2]"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1233,7 +1295,10 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               return (
                 <button
                   key={sub.id}
-                  onClick={() => setMatchSubTab(sub.id)}
+                  onClick={() => {
+                    setMatchSubTab(sub.id);
+                    if (sub.id === 'tournaments') setInspectedMatch(null);
+                  }}
                   className={`px-3.5 py-2 rounded-xl text-xs font-gaming font-bold flex items-center gap-1.5 transition-all ${
                     active
                       ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 shadow-sm'
@@ -1247,8 +1312,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
             })}
           </div>
 
-          {/* 4A: MATCHES LIST */}
-          {matchSubTab === 'tournaments' && (
+          {/* 4A: MATCHES LIST OR PER-MATCH INSPECTOR */}
+          {matchSubTab === 'tournaments' && !inspectedMatch && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -1256,13 +1321,15 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     MATCH MANAGEMENT
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Create, edit, and configure rooms for tournaments.
+                    Host matches, edit slots &amp; description, inspect joined players, and assign winner ranks.
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => {
                     setEditingTournament({
                       title: '',
+                      description: '',
                       game_mode: 'Solo',
                       map_name: 'Bermuda',
                       entry_fee: 50,
@@ -1275,7 +1342,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                     });
                     setShowTournamentModal(true);
                   }}
-                  className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow flex items-center gap-1.5 self-start sm:self-auto"
+                  className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-gaming font-bold text-xs rounded-xl shadow flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Match</span>
@@ -1283,329 +1350,684 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               </div>
 
               <div className="space-y-3">
-                {tournaments.map(t => (
-                  <div
-                    key={t.id}
-                    className={`${cardCls} p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-slate-900 dark:text-white text-sm font-gaming">{t.title}</span>
-                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold uppercase">
-                          {t.game_mode}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
-                          {t.map_name}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold uppercase">
-                          {t.status}
-                        </span>
+                {tournaments.map(t => {
+                  const joinedCount = Math.max(0, Number(t.total_slots || 0) - Number(t.available_slots || 0));
+                  return (
+                    <div
+                      key={t.id}
+                      className={`${cardCls} p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs hover:border-orange-500/40 transition-colors`}
+                    >
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openMatchInspector(t, 'players')}
+                            className="font-bold text-slate-900 dark:text-white hover:text-orange-600 dark:hover:text-orange-400 text-sm font-gaming text-left cursor-pointer"
+                          >
+                            {t.title}
+                          </button>
+                          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold uppercase">
+                            {t.game_mode}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+                            {t.map_name}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold uppercase">
+                            {t.status}
+                          </span>
+                        </div>
+                        {t.description && String(t.description).trim() && (
+                          <p className="text-slate-600 dark:text-slate-400 line-clamp-1 text-[11px]">
+                            {t.description}
+                          </p>
+                        )}
+                        <div className="text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-0.5 tabular-nums">
+                          <span>
+                            Players: <strong className="text-slate-800 dark:text-slate-200">{joinedCount}/{t.total_slots}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>Entry: <strong>{formatINR(t.entry_fee)}</strong></span>
+                          <span>•</span>
+                          <span>Prize: <strong>{formatINR(t.prize_pool)}</strong></span>
+                          <span>•</span>
+                          <span>{formatISTDateTime(t.match_at)}</span>
+                        </div>
                       </div>
-                      <div className="text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-0.5 tabular-nums">
-                        <span>Slots: <strong>{t.total_slots - t.available_slots}/{t.total_slots}</strong></span>
-                        <span>•</span>
-                        <span>Entry: <strong>{formatINR(t.entry_fee)}</strong></span>
-                        <span>•</span>
-                        <span>Prize: <strong>{formatINR(t.prize_pool)}</strong></span>
-                        <span>•</span>
-                        <span>{formatISTDateTime(t.match_at)}</span>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openMatchInspector(t, 'players')}
+                          className="px-3 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-950 hover:opacity-90 rounded-xl font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Players ({joinedCount}) &amp; Ranks</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTournament({
+                              ...t,
+                              description: t.description || '',
+                              match_at: t.match_at ? new Date(t.match_at).toISOString().slice(0, 16) : ''
+                            });
+                            setShowTournamentModal(true);
+                          }}
+                          className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-semibold inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTournamentForRoom(t);
+                            setMatchSubTab('rooms');
+                          }}
+                          className="px-3 py-2 bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500 hover:text-white rounded-xl font-bold transition-colors cursor-pointer"
+                        >
+                          Room ID
+                        </button>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-                    <div className="flex items-center gap-2 shrink-0">
+          {/* 4A-2: PER-MATCH INSPECTOR (FULL PLAYER DETAILS + RANK ASSIGNMENT) */}
+          {matchSubTab === 'tournaments' && inspectedMatch && (
+            <div className="space-y-4">
+              {/* Top Navigation & Match Header */}
+              <div className={`${cardCls} p-4 sm:p-5 space-y-4`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setInspectedMatch(null)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer mb-1"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back to All Matches</span>
+                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-gaming font-extrabold text-lg sm:text-xl text-slate-900 dark:text-white">
+                        {inspectedMatch.title}
+                      </h2>
+                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase">
+                        {inspectedMatch.game_mode} · {inspectedMatch.map_name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold uppercase">
+                        {inspectedMatch.status}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span>Match Time: <strong>{formatISTDateTime(inspectedMatch.match_at)}</strong></span>
+                      <span>•</span>
+                      <span>Entry: <strong>{formatINR(inspectedMatch.entry_fee || 0)}</strong></span>
+                      <span>•</span>
+                      <span>Prize Pool: <strong className="text-emerald-600 dark:text-emerald-400">{formatINR(inspectedMatch.prize_pool || 0)}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTournament({
+                          ...inspectedMatch,
+                          description: inspectedMatch.description || '',
+                          match_at: inspectedMatch.match_at ? new Date(inspectedMatch.match_at).toISOString().slice(0, 16) : ''
+                        });
+                        setShowTournamentModal(true);
+                      }}
+                      className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Edit Match &amp; Slots</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTournamentForRoom(inspectedMatch);
+                        setInspectedMatch(null);
+                        setMatchSubTab('rooms');
+                      }}
+                      className="px-3 py-2 bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500 hover:text-white rounded-xl font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Room ID</span>
+                    </button>
+                  </div>
+                </div>
+
+                {inspectedMatch.description && String(inspectedMatch.description).trim() && (
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-line">
+                    <span className="font-bold text-slate-900 dark:text-white block mb-0.5">Match Description:</span>
+                    {inspectedMatch.description}
+                  </div>
+                )}
+
+                {/* Summary Stats Strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                    <div className="text-[11px] text-slate-500">Total Players Joined</div>
+                    <div className="font-gaming font-bold text-lg text-slate-900 dark:text-white tabular-nums mt-0.5">
+                      {matchSummary?.joinedCount ?? matchParticipants.filter(p => p.payment_status !== 'rejected').length} / {inspectedMatch.total_slots}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400">Approved Slots</div>
+                    <div className="font-gaming font-bold text-lg text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5">
+                      {matchSummary?.approvedCount ?? matchParticipants.filter(p => p.payment_status === 'approved').length}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                    <div className="text-[11px] text-amber-700 dark:text-amber-400">Pending Payment</div>
+                    <div className="font-gaming font-bold text-lg text-amber-600 dark:text-amber-400 tabular-nums mt-0.5">
+                      {matchSummary?.pendingCount ?? matchParticipants.filter(p => p.payment_status === 'pending').length}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                    <div className="text-[11px] text-orange-700 dark:text-orange-400">Ranked / Collection</div>
+                    <div className="font-gaming font-bold text-lg text-orange-600 dark:text-orange-400 tabular-nums mt-0.5">
+                      {matchSummary?.rankedCount ?? 0} Ranked · {formatINR(matchSummary?.totalRevenue ?? 0)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inspector Mode Switch */}
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setMatchInspectorTab('players')}
+                    className={`px-4 py-2 rounded-xl text-xs font-gaming font-bold inline-flex items-center gap-1.5 cursor-pointer ${
+                      matchInspectorTab === 'players'
+                        ? 'bg-orange-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>All Player Details ({matchParticipants.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchInspectorTab('ranks')}
+                    className={`px-4 py-2 rounded-xl text-xs font-gaming font-bold inline-flex items-center gap-1.5 cursor-pointer ${
+                      matchInspectorTab === 'ranks'
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Assign Ranks &amp; Winners</span>
+                  </button>
+                </div>
+              </div>
+
+              {loadingMatchDetails ? (
+                <div className={`${cardCls} p-10 text-center text-xs text-slate-500`}>
+                  Loading match players and details...
+                </div>
+              ) : matchInspectorTab === 'players' ? (
+                <div className="space-y-3">
+                  {/* Search & Status Filters */}
+                  <div className={`${cardCls} p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs`}>
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Search by IGN, Free Fire UID, Username, UTR, WhatsApp, or Slot #..."
+                        value={participantSearch}
+                        onChange={e => setParticipantSearch(e.target.value)}
+                        className={`${inputCls} pl-8`}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {(['all', 'approved', 'pending', 'rejected'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setParticipantStatusFilter(st)}
+                          className={`px-3 py-1.5 rounded-lg font-bold capitalize cursor-pointer ${
+                            participantStatusFilter === st
+                              ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const q = participantSearch.trim().toLowerCase();
+                    const filteredParticipants = matchParticipants.filter(p => {
+                      if (participantStatusFilter !== 'all' && p.payment_status !== participantStatusFilter) {
+                        return false;
+                      }
+                      if (!q) return true;
+                      return (
+                        String(p.free_fire_ign || '').toLowerCase().includes(q) ||
+                        String(p.free_fire_uid || '').toLowerCase().includes(q) ||
+                        String(p.username || '').toLowerCase().includes(q) ||
+                        String(p.full_name || '').toLowerCase().includes(q) ||
+                        String(p.email || '').toLowerCase().includes(q) ||
+                        String(p.phone || '').toLowerCase().includes(q) ||
+                        String(p.payment?.transaction_ref || '').toLowerCase().includes(q) ||
+                        String(p.payment?.whatsapp_number || '').toLowerCase().includes(q) ||
+                        String(p.slot_number || '').includes(q)
+                      );
+                    });
+
+                    if (filteredParticipants.length === 0) {
+                      return (
+                        <div className={`${cardCls} p-10 text-center text-xs text-slate-500`}>
+                          No players match this filter in {inspectedMatch.title}.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-2.5">
+                        {filteredParticipants.map((p, idx) => (
+                          <div
+                            key={p.registration_id || idx}
+                            className={`${cardCls} p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs`}
+                          >
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              <div className="flex flex-col items-center gap-1 shrink-0">
+                                <img
+                                  src={getSafeImageUrl(p.avatar_url, DEFAULT_PLAYER_AVATAR)}
+                                  alt={p.free_fire_ign}
+                                  className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                                  onError={e => {
+                                    (e.currentTarget as HTMLImageElement).src = DEFAULT_PLAYER_AVATAR;
+                                  }}
+                                />
+                                <span className="px-2 py-0.5 rounded bg-orange-500/15 text-orange-600 dark:text-orange-400 font-mono font-bold text-[10px]">
+                                  Slot #{p.slot_number}
+                                </span>
+                              </div>
+
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-gaming font-bold text-sm text-slate-900 dark:text-white">
+                                    {p.free_fire_ign || p.username}
+                                  </span>
+                                  <span className="text-slate-500">@{p.username}</span>
+                                  {p.full_name && (
+                                    <span className="text-slate-500">({p.full_name})</span>
+                                  )}
+                                  <span
+                                    className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                                      p.payment_status === 'approved'
+                                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                        : p.payment_status === 'rejected'
+                                          ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                                          : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                                    }`}
+                                  >
+                                    {p.payment_status}
+                                  </span>
+                                  {p.result && (
+                                    <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-gaming font-bold text-[10px]">
+                                      Rank #{p.result.rank} · {p.result.kills} Kills · {p.result.total_points} Pts
+                                      {p.result.prize_amount > 0 ? ` · ${formatINR(p.result.prize_amount)}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-600 dark:text-slate-300">
+                                  <span>
+                                    FF UID: <strong className="font-mono text-slate-900 dark:text-white">{p.free_fire_uid || 'Not set'}</strong>
+                                  </span>
+                                  {p.payment?.transaction_ref && (
+                                    <span>
+                                      UTR: <strong className="font-mono text-orange-600 dark:text-orange-400">{p.payment.transaction_ref}</strong>
+                                    </span>
+                                  )}
+                                  {p.payment?.whatsapp_number && (
+                                    <span>
+                                      WhatsApp: <strong className="font-mono">{p.payment.whatsapp_number}</strong>
+                                    </span>
+                                  )}
+                                  {p.phone && !p.payment?.whatsapp_number && (
+                                    <span>
+                                      Phone: <strong className="font-mono">{p.phone}</strong>
+                                    </span>
+                                  )}
+                                  {p.email && (
+                                    <span>
+                                      Email: <strong className="font-mono">{p.email}</strong>
+                                    </span>
+                                  )}
+                                  {p.registered_at && (
+                                    <span className="text-slate-500">
+                                      Joined: {formatISTDateTime(p.registered_at)}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {p.team && (
+                                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] flex flex-wrap items-center gap-2">
+                                    <span className="font-bold text-orange-600 dark:text-orange-400">
+                                      Team: {p.team.name} [{p.team.tag}]
+                                    </span>
+                                    {(p.team.members || []).map((m: any, mIdx: number) => (
+                                      <span key={mIdx} className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                                        {m.free_fire_ign} (UID: {m.free_fire_uid || 'N/A'})
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {p.rejection_reason && (
+                                  <div className="text-red-600 dark:text-red-400 text-[11px]">
+                                    Rejection reason: {p.rejection_reason}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Actions on right */}
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                              {p.payment?.screenshot_url && (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingScreenshot(p.payment.screenshot_url)}
+                                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-semibold inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Proof</span>
+                                </button>
+                              )}
+
+                              {canPayments && p.payment?.id && p.payment_status === 'pending' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVerifyPayment(p.payment.id, 'approved')}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRejectModalPayment(p.payment)}
+                                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleAssignRankToParticipant(p)}
+                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl font-gaming font-bold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Award className="w-3.5 h-3.5" />
+                                <span>{p.result ? `Edit Rank (#${p.result.rank})` : 'Assign Rank'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                /* TAB B: ASSIGN RANKS & WINNERS INSIDE MATCH */
+                <div className={`${cardCls} p-4 sm:p-5 space-y-4 text-xs`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                    <div>
+                      <h3 className="font-gaming font-bold text-base text-slate-900 dark:text-white">
+                        ASSIGN USER RANKS &amp; WINNERS
+                      </h3>
+                      <p className="text-slate-500 dark:text-slate-400">
+                        Select joined players from this match to assign their Rank (#1, #2, #3...), Kills, Points, and Prize. Leaderboard &amp; player stats update automatically.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {matchParticipants.filter(p => p.payment_status !== 'rejected').length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const active = matchParticipants.filter(p => p.payment_status !== 'rejected');
+                            const existingUids = new Set(inspectorResultsEntries.map(r => r.user_id).filter(Boolean));
+                            const filled = inspectorResultsEntries.filter(r => r.user_id || String(r.player_name || '').trim());
+                            const prizePool = Number(inspectedMatch.prize_pool || 0);
+                            const toAdd = active
+                              .filter(p => !existingUids.has(p.user_id))
+                              .map((p, i) => {
+                                const rNum = filled.length + i + 1;
+                                const defaultPrize =
+                                  rNum === 1 ? Math.round(prizePool * 0.5)
+                                  : rNum === 2 ? Math.round(prizePool * 0.3)
+                                  : rNum === 3 ? Math.round(prizePool * 0.2)
+                                  : 0;
+                                return {
+                                  rank: rNum,
+                                  user_id: p.user_id,
+                                  player_name: p.free_fire_ign || p.username || 'Player',
+                                  kills: 0,
+                                  placement_points: getDefaultPlacementPoints(rNum),
+                                  prize_amount: defaultPrize,
+                                  notes: ''
+                                };
+                              });
+                            if (toAdd.length > 0) {
+                              setInspectorResultsEntries([...filled, ...toAdd]);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500 hover:text-white rounded-lg font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Load Joined Players</span>
+                        </button>
+                      )}
                       <button
+                        type="button"
                         onClick={() => {
-                          setEditingTournament({
-                            ...t,
-                            match_at: t.match_at ? new Date(t.match_at).toISOString().slice(0, 16) : ''
-                          });
-                          setShowTournamentModal(true);
+                          const nextRank = inspectorResultsEntries.length + 1;
+                          setInspectorResultsEntries([
+                            ...inspectorResultsEntries,
+                            {
+                              rank: nextRank,
+                              user_id: '',
+                              player_name: '',
+                              kills: 0,
+                              placement_points: getDefaultPlacementPoints(nextRank),
+                              prize_amount: 0,
+                              notes: ''
+                            }
+                          ]);
                         }}
-                        className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-semibold inline-flex items-center gap-1"
+                        className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-slate-800 dark:text-slate-200 rounded-lg inline-flex items-center gap-1 cursor-pointer"
                       >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleSelectTournamentForRoom(t);
-                          setMatchSubTab('rooms');
-                        }}
-                        className="px-3 py-2 bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500 hover:text-white rounded-xl font-bold transition-colors"
-                      >
-                        Room ID
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Rank Row</span>
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {showTournamentModal && editingTournament && (
-                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
-                  <div className="w-full max-w-xl max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-                    <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                      <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
-                        {editingTournament.id ? 'EDIT MATCH' : 'CREATE NEW MATCH'}
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => { setShowTournamentModal(false); setTournamentSaveStatus('idle'); }}
-                        className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <form
-                      id="admin-tournament-form"
-                      onSubmit={async e => {
-                        e.preventDefault();
-                        setTournamentSaveStatus('loading');
-                        try {
-                          const normalizedBanner = normalizeImageUrl(editingTournament.banner_image);
-                          const payload = {
-                            ...editingTournament,
-                            banner_image: normalizedBanner,
-                            match_at: new Date(editingTournament.match_at).toISOString()
-                          };
-                          if (editingTournament.id) {
-                            await apiRequest(`/admin/tournaments/${editingTournament.id}`, {
-                              method: 'PUT',
-                              body: JSON.stringify(payload)
-                            });
-                          } else {
-                            await apiRequest('/admin/tournaments', {
-                              method: 'POST',
-                              body: JSON.stringify(payload)
-                            });
-                          }
-                          setTournamentSaveStatus('success');
-                          await new Promise(r => setTimeout(r, 550));
-                          setTournamentSaveStatus('idle');
-                          setShowTournamentModal(false);
-                          const refreshed = await apiRequest<{ tournaments: any[] }>('/tournaments');
-                          setTournaments(refreshed.tournaments || []);
-                          window.dispatchEvent(new Event('flaxy_tournaments_updated'));
-                        } catch (err: any) {
-                          setTournamentSaveStatus('idle');
-                          alert(err.message);
-                        }
-                      }}
-                      className="flex-1 min-h-0 flex flex-col text-xs"
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">Match Status After Save:</label>
+                    <select
+                      value={inspectorMatchStatus}
+                      onChange={e => setInspectorMatchStatus(e.target.value)}
+                      className={`${inputCls} w-auto`}
                     >
-                      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] p-4 sm:p-5 pb-8 space-y-4">
-                      <div>
-                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Match Title *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={editingTournament.title}
-                          onChange={e => setEditingTournament({ ...editingTournament, title: e.target.value })}
-                          className={inputCls}
-                        />
-                      </div>
+                      <option value="Completed">Completed</option>
+                      <option value="Live">Live</option>
+                      <option value="Registration Open">Registration Open</option>
+                    </select>
+                  </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Mode
-                          </label>
-                          <select
-                            value={editingTournament.game_mode}
-                            onChange={e => setEditingTournament({ ...editingTournament, game_mode: e.target.value })}
-                            className={inputCls}
-                          >
-                            <option value="Solo">Solo</option>
-                            <option value="Duo">Duo</option>
-                            <option value="Squad">Squad</option>
-                            <option value="Clash Squad">Clash Squad</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Map
-                          </label>
-                          <select
-                            value={editingTournament.map_name}
-                            onChange={e => setEditingTournament({ ...editingTournament, map_name: e.target.value })}
-                            className={inputCls}
-                          >
-                            <option value="Bermuda">Bermuda</option>
-                            <option value="Purgatory">Purgatory</option>
-                            <option value="Kalahari">Kalahari</option>
-                            <option value="Alpine">Alpine</option>
-                            <option value="Nextra">Nextra</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Entry (₹)
-                          </label>
-                          <input
-                            type="number"
-                            value={editingTournament.entry_fee}
-                            onChange={e =>
-                              setEditingTournament({
-                                ...editingTournament,
-                                entry_fee: parseInt(e.target.value, 10) || 0
-                              })
-                            }
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Prize (₹)
-                          </label>
-                          <input
-                            type="number"
-                            value={editingTournament.prize_pool}
-                            onChange={e =>
-                              setEditingTournament({
-                                ...editingTournament,
-                                prize_pool: parseInt(e.target.value, 10) || 0
-                              })
-                            }
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Slots
-                          </label>
-                          <input
-                            type="number"
-                            value={editingTournament.total_slots}
-                            onChange={e =>
-                              setEditingTournament({
-                                ...editingTournament,
-                                total_slots: parseInt(e.target.value, 10) || 48
-                              })
-                            }
-                            className={inputCls}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Match Time (IST)
-                          </label>
-                          <input
-                            type="datetime-local"
-                            required
-                            value={editingTournament.match_at}
-                            onChange={e => setEditingTournament({ ...editingTournament, match_at: e.target.value })}
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Status
-                          </label>
-                          <select
-                            value={editingTournament.status}
-                            onChange={e => setEditingTournament({ ...editingTournament, status: e.target.value })}
-                            className={inputCls}
-                          >
-                            <option value="Registration Open">Registration Open</option>
-                            <option value="Upcoming">Upcoming</option>
-                            <option value="Live">Live</option>
-                            <option value="Completed">Completed</option>
-                            <option value="Cancelled">Cancelled</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300">
-                            Banner Image URL or Upload
-                          </label>
-                          <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer text-[11px] font-semibold text-slate-800 dark:text-slate-200">
-                            <Upload className="w-3.5 h-3.5 text-orange-500" />
-                            <span>Upload Photo</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={e => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                const reader = new FileReader();
-                                reader.onload = () => {
-                                  setEditingTournament({
-                                    ...editingTournament,
-                                    banner_image: reader.result as string
-                                  });
-                                };
-                                reader.readAsDataURL(file);
-                              }}
-                            />
-                          </label>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Paste image link (https://... or Google Drive link)"
-                          value={editingTournament.banner_image || ''}
-                          onChange={e => setEditingTournament({ ...editingTournament, banner_image: e.target.value })}
-                          className={inputCls}
-                        />
-                        <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                          <img
-                            src={getSafeImageUrl(editingTournament.banner_image, DEFAULT_MATCH_BANNER)}
-                            alt="Match banner preview"
-                            className="w-20 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                            onError={e => {
-                              (e.currentTarget as HTMLImageElement).src = DEFAULT_MATCH_BANNER;
-                            }}
-                          />
-                          <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                            Live Banner Preview — supports direct image URLs, Google Drive share links, or uploaded photos.
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Rules
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={editingTournament.rules_text || ''}
-                          onChange={e => setEditingTournament({ ...editingTournament, rules_text: e.target.value })}
-                          className={inputCls}
-                        />
-                      </div>
-                      </div>
-
-                      {/* Always-Visible Pinned Confirm & Save Footer */}
-                      <div className="shrink-0 px-4 sm:px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => { setShowTournamentModal(false); setTournamentSaveStatus('idle'); }}
-                          className="flex-1 min-h-[46px] py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                  <div className="space-y-2.5">
+                    {inspectorResultsEntries.map((resItem, idx) => {
+                      const totalPts = Number(resItem.kills || 0) + Number(resItem.placement_points || 0);
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5"
                         >
-                          Cancel
-                        </button>
-                        <SpringActionButton
-                          type="submit"
-                          form="admin-tournament-form"
-                          status={tournamentSaveStatus}
-                          idleLabel="Confirm & Save Match"
-                          loadingLabel="Saving Match..."
-                          successLabel="Match Confirmed!"
-                          className="flex-[2]"
-                        />
-                      </div>
-                    </form>
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                            <div className="sm:col-span-5">
+                              <span className="text-[10px] text-slate-500 uppercase block mb-0.5">
+                                Pick Joined Player {resItem.user_id ? '✓ Linked' : '(Optional)'}
+                              </span>
+                              <select
+                                value={resItem.user_id || ''}
+                                onChange={e => {
+                                  const selectedUid = e.target.value;
+                                  const updated = [...inspectorResultsEntries];
+                                  if (!selectedUid) {
+                                    updated[idx] = { ...updated[idx], user_id: '' };
+                                  } else {
+                                    const found = matchParticipants.find(mp => mp.user_id === selectedUid);
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      user_id: selectedUid,
+                                      player_name: found ? (found.free_fire_ign || found.username) : updated[idx].player_name
+                                    };
+                                  }
+                                  setInspectorResultsEntries(updated);
+                                }}
+                                className={inputCls}
+                              >
+                                <option value="">-- Custom / Manual Player --</option>
+                                {matchParticipants.map(mp => (
+                                  <option key={mp.registration_id} value={mp.user_id}>
+                                    Slot #{mp.slot_number} — {mp.free_fire_ign || mp.username} (UID: {mp.free_fire_uid || 'N/A'}) [{mp.payment_status}]
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="sm:col-span-4">
+                              <span className="text-[10px] text-slate-500 uppercase block mb-0.5">Player IGN / Name</span>
+                              <input
+                                type="text"
+                                placeholder="Player IGN"
+                                value={resItem.player_name}
+                                onChange={e => {
+                                  const updated = [...inspectorResultsEntries];
+                                  updated[idx] = { ...updated[idx], player_name: e.target.value };
+                                  setInspectorResultsEntries(updated);
+                                }}
+                                className={inputCls}
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <span className="text-[10px] text-slate-500 uppercase block mb-0.5">Total Pts</span>
+                              <div className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono font-bold text-orange-600 dark:text-orange-400">
+                                {totalPts} PTS
+                              </div>
+                            </div>
+
+                            <div className="sm:col-span-1 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setInspectorResultsEntries(inspectorResultsEntries.filter((_, i) => i !== idx))}
+                                title="Remove row"
+                                className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div>
+                              <span className="text-[10px] text-slate-500 uppercase">Rank #</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={200}
+                                value={resItem.rank}
+                                onChange={e => {
+                                  const updated = [...inspectorResultsEntries];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    rank: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                                  };
+                                  setInspectorResultsEntries(updated);
+                                }}
+                                className={`${inputCls} font-mono font-bold`}
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 uppercase">Kills</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={resItem.kills}
+                                onChange={e => {
+                                  const updated = [...inspectorResultsEntries];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    kills: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                                  };
+                                  setInspectorResultsEntries(updated);
+                                }}
+                                className={inputCls}
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 uppercase">Place Pts</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={resItem.placement_points}
+                                onChange={e => {
+                                  const updated = [...inspectorResultsEntries];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    placement_points: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                                  };
+                                  setInspectorResultsEntries(updated);
+                                }}
+                                className={inputCls}
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 uppercase">Prize (₹)</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={resItem.prize_amount}
+                                onChange={e => {
+                                  const updated = [...inspectorResultsEntries];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    prize_amount: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                                  };
+                                  setInspectorResultsEntries(updated);
+                                }}
+                                className={`${inputCls} text-emerald-600 dark:text-emerald-400 font-bold`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="sticky bottom-[4.5rem] md:bottom-3 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg">
+                    <SpringActionButton
+                      type="button"
+                      onClick={handleSaveInspectorResults}
+                      status={inspectorResultsSaveStatus}
+                      idleLabel="Confirm & Publish Ranks & Winners"
+                      loadingLabel="Publishing Ranks..."
+                      successLabel="Ranks Published!"
+                      className="w-full"
+                    />
                   </div>
                 </div>
               )}
@@ -1793,100 +2215,198 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
 
               {selectedTournamentForResults && (
                 <div className={`${cardCls} p-5 space-y-4`}>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                    <h3 className="font-gaming font-bold text-base text-slate-900 dark:text-white">
-                      WINNERS ({selectedTournamentForResults.title})
-                    </h3>
-                    <button
-                      onClick={() =>
-                        setResultsEntries([
-                          ...resultsEntries,
-                          {
-                            rank: resultsEntries.length + 1,
-                            player_name: '',
-                            kills: 0,
-                            placement_points: 0,
-                            prize_amount: 0
-                          }
-                        ])
-                      }
-                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 rounded-lg flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add Row
-                    </button>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <div>
+                      <h3 className="font-gaming font-bold text-base text-slate-900 dark:text-white">
+                        WINNERS &amp; RANKS ({selectedTournamentForResults.title})
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        {resultsTabParticipants.length} registered players loaded — pick players directly to link rank &amp; leaderboard stats.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {resultsTabParticipants.filter(p => p.payment_status !== 'rejected').length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const active = resultsTabParticipants.filter(p => p.payment_status !== 'rejected');
+                            const existingUids = new Set(resultsEntries.map(r => r.user_id).filter(Boolean));
+                            const filled = resultsEntries.filter(r => r.user_id || String(r.player_name || '').trim());
+                            const prizePool = Number(selectedTournamentForResults.prize_pool || 0);
+                            const toAdd = active
+                              .filter(p => !existingUids.has(p.user_id))
+                              .map((p, i) => {
+                                const rNum = filled.length + i + 1;
+                                const defaultPrize =
+                                  rNum === 1 ? Math.round(prizePool * 0.5)
+                                  : rNum === 2 ? Math.round(prizePool * 0.3)
+                                  : rNum === 3 ? Math.round(prizePool * 0.2)
+                                  : 0;
+                                return {
+                                  rank: rNum,
+                                  user_id: p.user_id,
+                                  player_name: p.free_fire_ign || p.username || 'Player',
+                                  kills: 0,
+                                  placement_points: getDefaultPlacementPoints(rNum),
+                                  prize_amount: defaultPrize
+                                };
+                              });
+                            if (toAdd.length > 0) setResultsEntries([...filled, ...toAdd]);
+                          }}
+                          className="px-3 py-1.5 bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500 hover:text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer"
+                        >
+                          <Users className="w-3.5 h-3.5" /> Load Players
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextRank = resultsEntries.length + 1;
+                          setResultsEntries([
+                            ...resultsEntries,
+                            {
+                              rank: nextRank,
+                              user_id: '',
+                              player_name: '',
+                              kills: 0,
+                              placement_points: getDefaultPlacementPoints(nextRank),
+                              prize_amount: 0
+                            }
+                          ]);
+                        }}
+                        className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 rounded-lg flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Row
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2.5">
                     {resultsEntries.map((resItem, idx) => (
                       <div
                         key={idx}
-                        className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs"
+                        className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-xs"
                       >
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase">Rank</span>
-                          <input
-                            type="number"
-                            value={resItem.rank}
-                            onChange={e => {
-                              const updated = [...resultsEntries];
-                              updated[idx].rank = parseInt(e.target.value, 10) || 1;
-                              setResultsEntries(updated);
-                            }}
-                            className={inputCls}
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                          <div className="sm:col-span-6">
+                            <span className="text-[10px] text-slate-500 uppercase block mb-0.5">
+                              Joined Player {resItem.user_id ? '✓ Linked' : '(Optional)'}
+                            </span>
+                            <select
+                              value={resItem.user_id || ''}
+                              onChange={e => {
+                                const selectedUid = e.target.value;
+                                const updated = [...resultsEntries];
+                                if (!selectedUid) {
+                                  updated[idx] = { ...updated[idx], user_id: '' };
+                                } else {
+                                  const found = resultsTabParticipants.find(mp => mp.user_id === selectedUid);
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    user_id: selectedUid,
+                                    player_name: found ? (found.free_fire_ign || found.username) : updated[idx].player_name
+                                  };
+                                }
+                                setResultsEntries(updated);
+                              }}
+                              className={inputCls}
+                            >
+                              <option value="">-- Custom / Manual Player --</option>
+                              {resultsTabParticipants.map(mp => (
+                                <option key={mp.registration_id} value={mp.user_id}>
+                                  Slot #{mp.slot_number} — {mp.free_fire_ign || mp.username} (UID: {mp.free_fire_uid || 'N/A'})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="sm:col-span-5">
+                            <span className="text-[10px] text-slate-500 uppercase block mb-0.5">Player IGN</span>
+                            <input
+                              type="text"
+                              placeholder="IGN"
+                              value={resItem.player_name}
+                              onChange={e => {
+                                const updated = [...resultsEntries];
+                                updated[idx] = { ...updated[idx], player_name: e.target.value };
+                                setResultsEntries(updated);
+                              }}
+                              className={inputCls}
+                            />
+                          </div>
+                          <div className="sm:col-span-1 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setResultsEntries(resultsEntries.filter((_, i) => i !== idx))}
+                              className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase">Player IGN</span>
-                          <input
-                            type="text"
-                            placeholder="IGN"
-                            value={resItem.player_name}
-                            onChange={e => {
-                              const updated = [...resultsEntries];
-                              updated[idx].player_name = e.target.value;
-                              setResultsEntries(updated);
-                            }}
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase">Kills</span>
-                          <input
-                            type="number"
-                            value={resItem.kills}
-                            onChange={e => {
-                              const updated = [...resultsEntries];
-                              updated[idx].kills = parseInt(e.target.value, 10) || 0;
-                              setResultsEntries(updated);
-                            }}
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase">Place Pts</span>
-                          <input
-                            type="number"
-                            value={resItem.placement_points}
-                            onChange={e => {
-                              const updated = [...resultsEntries];
-                              updated[idx].placement_points = parseInt(e.target.value, 10) || 0;
-                              setResultsEntries(updated);
-                            }}
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase">Prize (₹)</span>
-                          <input
-                            type="number"
-                            value={resItem.prize_amount}
-                            onChange={e => {
-                              const updated = [...resultsEntries];
-                              updated[idx].prize_amount = parseInt(e.target.value, 10) || 0;
-                              setResultsEntries(updated);
-                            }}
-                            className={`${inputCls} text-emerald-600 dark:text-emerald-400 font-bold`}
-                          />
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase">Rank</span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={resItem.rank}
+                              onChange={e => {
+                                const updated = [...resultsEntries];
+                                updated[idx] = { ...updated[idx], rank: e.target.value === '' ? '' : parseInt(e.target.value, 10) };
+                                setResultsEntries(updated);
+                              }}
+                              className={inputCls}
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase">Kills</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={resItem.kills}
+                              onChange={e => {
+                                const updated = [...resultsEntries];
+                                updated[idx] = { ...updated[idx], kills: e.target.value === '' ? '' : parseInt(e.target.value, 10) };
+                                setResultsEntries(updated);
+                              }}
+                              className={inputCls}
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase">Place Pts</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={resItem.placement_points}
+                              onChange={e => {
+                                const updated = [...resultsEntries];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  placement_points: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                                };
+                                setResultsEntries(updated);
+                              }}
+                              className={inputCls}
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase">Prize (₹)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={resItem.prize_amount}
+                              onChange={e => {
+                                const updated = [...resultsEntries];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  prize_amount: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                                };
+                                setResultsEntries(updated);
+                              }}
+                              className={`${inputCls} text-emerald-600 dark:text-emerald-400 font-bold`}
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -3122,6 +3642,382 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* CREATE / EDIT MATCH MODAL (Global so it works from Matches list & Match Inspector) */}
+      {showTournamentModal && editingTournament && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+          <div className="w-full max-w-xl max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <h3 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
+                {editingTournament.id ? 'EDIT MATCH' : 'CREATE NEW MATCH'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setShowTournamentModal(false); setTournamentSaveStatus('idle'); }}
+                className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              id="admin-tournament-form"
+              onSubmit={async e => {
+                e.preventDefault();
+                const parsedSlots = Number(editingTournament.total_slots);
+                if (!Number.isFinite(parsedSlots) || parsedSlots < 2 || parsedSlots > 200) {
+                  alert('Total slots must be between 2 and 200.');
+                  return;
+                }
+                setTournamentSaveStatus('loading');
+                try {
+                  const normalizedBanner = normalizeImageUrl(editingTournament.banner_image);
+                  const payload = {
+                    ...editingTournament,
+                    entry_fee: Math.max(0, Number(editingTournament.entry_fee || 0)),
+                    prize_pool: Math.max(0, Number(editingTournament.prize_pool || 0)),
+                    total_slots: Math.round(parsedSlots),
+                    description: String(editingTournament.description || ''),
+                    banner_image: normalizedBanner,
+                    match_at: new Date(editingTournament.match_at).toISOString()
+                  };
+                  if (editingTournament.id) {
+                    await apiRequest(`/admin/tournaments/${editingTournament.id}`, {
+                      method: 'PUT',
+                      body: JSON.stringify(payload)
+                    });
+                  } else {
+                    await apiRequest('/admin/tournaments', {
+                      method: 'POST',
+                      body: JSON.stringify(payload)
+                    });
+                  }
+                  setTournamentSaveStatus('success');
+                  await new Promise(r => setTimeout(r, 550));
+                  setTournamentSaveStatus('idle');
+                  setShowTournamentModal(false);
+                  const refreshed = await apiRequest<{ tournaments: any[] }>('/tournaments');
+                  const updatedList = refreshed.tournaments || [];
+                  setTournaments(updatedList);
+                  if (inspectedMatch && editingTournament.id === inspectedMatch.id) {
+                    await openMatchInspector(inspectedMatch, matchInspectorTab);
+                  }
+                  window.dispatchEvent(new Event('flaxy_tournaments_updated'));
+                } catch (err: any) {
+                  setTournamentSaveStatus('idle');
+                  alert(err.message);
+                }
+              }}
+              className="flex-1 min-h-0 flex flex-col text-xs"
+            >
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] p-4 sm:p-5 pb-8 space-y-4">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Match Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editingTournament.title}
+                    onChange={e => setEditingTournament({ ...editingTournament, title: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Match Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="Write match overview, prize distribution, kill rewards, or special instructions..."
+                    value={editingTournament.description || ''}
+                    onChange={e => setEditingTournament({ ...editingTournament, description: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Mode
+                    </label>
+                    <select
+                      value={editingTournament.game_mode}
+                      onChange={e => setEditingTournament({ ...editingTournament, game_mode: e.target.value })}
+                      className={inputCls}
+                    >
+                      <option value="Solo">Solo</option>
+                      <option value="Duo">Duo</option>
+                      <option value="Squad">Squad</option>
+                      <option value="Clash Squad">Clash Squad</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Map
+                    </label>
+                    <select
+                      value={editingTournament.map_name}
+                      onChange={e => setEditingTournament({ ...editingTournament, map_name: e.target.value })}
+                      className={inputCls}
+                    >
+                      <option value="Bermuda">Bermuda</option>
+                      <option value="Purgatory">Purgatory</option>
+                      <option value="Kalahari">Kalahari</option>
+                      <option value="Alpine">Alpine</option>
+                      <option value="Nextra">Nextra</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Entry (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editingTournament.entry_fee}
+                      onChange={e =>
+                        setEditingTournament({
+                          ...editingTournament,
+                          entry_fee: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                        })
+                      }
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Prize (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editingTournament.prize_pool}
+                      onChange={e =>
+                        setEditingTournament({
+                          ...editingTournament,
+                          prize_pool: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                        })
+                      }
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Slots (2–200) *
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={200}
+                      required
+                      value={editingTournament.total_slots}
+                      onChange={e =>
+                        setEditingTournament({
+                          ...editingTournament,
+                          total_slots: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                        })
+                      }
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Match Time (IST)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={editingTournament.match_at}
+                      onChange={e => setEditingTournament({ ...editingTournament, match_at: e.target.value })}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={editingTournament.status}
+                      onChange={e => setEditingTournament({ ...editingTournament, status: e.target.value })}
+                      className={inputCls}
+                    >
+                      <option value="Registration Open">Registration Open</option>
+                      <option value="Upcoming">Upcoming</option>
+                      <option value="Live">Live</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                      Banner Image URL or Upload
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+                      <Upload className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setEditingTournament({
+                              ...editingTournament,
+                              banner_image: reader.result as string
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Paste image link (https://... or Google Drive link)"
+                    value={editingTournament.banner_image || ''}
+                    onChange={e => setEditingTournament({ ...editingTournament, banner_image: e.target.value })}
+                    className={inputCls}
+                  />
+                  <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                    <img
+                      src={getSafeImageUrl(editingTournament.banner_image, DEFAULT_MATCH_BANNER)}
+                      alt="Match banner preview"
+                      className="w-20 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                      onError={e => {
+                        (e.currentTarget as HTMLImageElement).src = DEFAULT_MATCH_BANNER;
+                      }}
+                    />
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Live Banner Preview — supports direct image URLs, Google Drive share links, or uploaded photos.
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Rules
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editingTournament.rules_text || ''}
+                    onChange={e => setEditingTournament({ ...editingTournament, rules_text: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {/* Always-Visible Pinned Confirm & Save Footer */}
+              <div className="shrink-0 px-4 sm:px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowTournamentModal(false); setTournamentSaveStatus('idle'); }}
+                  className="flex-1 min-h-[46px] py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <SpringActionButton
+                  type="submit"
+                  form="admin-tournament-form"
+                  status={tournamentSaveStatus}
+                  idleLabel="Confirm & Save Match"
+                  loadingLabel="Saving Match..."
+                  successLabel="Match Confirmed!"
+                  className="flex-[2]"
+                />
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {viewingScreenshot && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4">
+          <div className="relative max-w-lg w-full max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div className="shrink-0 flex justify-between items-center px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+              <span className="font-gaming font-bold text-sm text-slate-900 dark:text-white">
+                Payment Receipt Screenshot
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingScreenshot(null)}
+                className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-4 text-center">
+              <img src={viewingScreenshot} alt="Receipt" className="max-h-[70dvh] mx-auto rounded-xl object-contain" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectModalPayment && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+          <div className="w-full max-w-md max-h-[90dvh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+              <h4 className="font-gaming font-bold text-lg text-slate-900 dark:text-white">
+                REJECT PAYMENT
+              </h4>
+              <button
+                type="button"
+                onClick={() => { setRejectModalPayment(null); setRejectSaveStatus('idle'); }}
+                className="text-slate-500 hover:text-slate-900 dark:hover:text-white px-2 py-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-5 space-y-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Enter reason for declining this UPI payment.
+              </p>
+              <textarea
+                rows={3}
+                required
+                placeholder="e.g. UTR not found or wrong amount"
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div className="shrink-0 px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => { setRejectModalPayment(null); setRejectSaveStatus('idle'); }}
+                className="flex-1 min-h-[46px] px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <SpringActionButton
+                type="button"
+                variant="danger"
+                status={rejectSaveStatus}
+                onClick={() => handleVerifyPayment(rejectModalPayment.id, 'rejected', rejectionReason)}
+                idleLabel="Confirm Reject"
+                loadingLabel="Rejecting..."
+                successLabel="Rejected!"
+                className="flex-[2]"
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

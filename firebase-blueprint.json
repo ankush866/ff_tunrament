@@ -60,6 +60,7 @@
         "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "title": { "type": "string", "minLength": 2, "maxLength": 150 },
         "slug": { "type": "string", "maxLength": 180 },
+        "description": { "type": "string", "maxLength": 2000 },
         "banner_image": { "type": "string", "maxLength": 350000 },
         "game_mode": { "type": "string", "enum": ["Solo", "Duo", "Squad", "Clash Squad"] },
         "map_name": { "type": "string", "maxLength": 64 },

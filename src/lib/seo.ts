@@ -25,6 +25,7 @@ export interface TournamentSeoData {
   match_at?: string;
   status?: string;
   banner_image?: string | null;
+  description?: string;
   rules_text?: string;
 }
 
@@ -352,7 +353,10 @@ export function buildTournamentMeta(
   const title = rawTitle.length > 70 ? `${tournament.title} | ${mode} · ${map} – Vlexa` : rawTitle;
 
   const statusLabel = tournament.status || 'Registration Open';
-  const description = `Join ${tournament.title} Free Fire ${mode} match on ${map}. Prize Pool: ${prize}, ${feeText}, ${availableSlots}/${totalSlots} slots left. Match: ${matchTimeText} (${statusLabel}).`;
+  const customDesc = tournament.description ? sanitizeVlexaSeoText(String(tournament.description)).trim() : '';
+  const description = customDesc
+    ? `${customDesc.slice(0, 140)} Prize Pool: ${prize}, ${feeText}, ${availableSlots}/${totalSlots} slots left.`
+    : `Join ${tournament.title} Free Fire ${mode} match on ${map}. Prize Pool: ${prize}, ${feeText}, ${availableSlots}/${totalSlots} slots left. Match: ${matchTimeText} (${statusLabel}).`;
 
   const origin = getCanonicalOrigin();
   const canonicalUrl = `${origin}/tournament/${tournament.id}`;

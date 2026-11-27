@@ -383,6 +383,17 @@ export const TournamentDetailView: React.FC<TournamentDetailViewProps> = ({
         </div>
       </div>
 
+      {tournament.description && String(tournament.description).trim() && (
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm">
+          <div className="text-[11px] font-gaming font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 mb-1.5">
+            Match Description
+          </div>
+          <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
+            {tournament.description}
+          </p>
+        </div>
+      )}
+
       {/* 3 Evenly-Spaced Navigation Tabs (Fully visible on mobile & desktop) */}
       <div className="w-full bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="grid grid-cols-3 gap-1.5">

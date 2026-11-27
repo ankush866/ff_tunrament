@@ -167,6 +167,11 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({ onNavigate }) 
                       <h2 className="font-gaming font-bold text-lg text-slate-900 dark:text-white line-clamp-1">
                         {tournament.title}
                       </h2>
+                      {tournament.description && String(tournament.description).trim() && (
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
+                          {tournament.description}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1">

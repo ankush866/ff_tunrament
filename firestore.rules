@@ -129,10 +129,11 @@ service cloud.firestore {
 
     function isValidTournament(data) {
       return data.keys().hasAll(['id', 'title', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'match_at', 'status', 'is_published', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'title', 'slug', 'banner_image', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'reg_open_at', 'reg_close_at', 'match_at', 'rules_text', 'status', 'is_published', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'slug', 'description', 'banner_image', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'reg_open_at', 'reg_close_at', 'match_at', 'rules_text', 'status', 'is_published', 'createdAt', 'updatedAt'])
         && isValidId(data.id)
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 150
         && isOptString(data, 'slug', 180)
+        && isOptString(data, 'description', 2000)
         && isOptString(data, 'banner_image', 350000)
         && data.game_mode in ['Solo', 'Duo', 'Squad', 'Clash Squad']
         && data.map_name is string && data.map_name.size() >= 1 && data.map_name.size() <= 64
@@ -564,7 +565,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          (hasStaffRole(['super_admin', 'tournament_manager']) && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'slug', 'banner_image', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'reg_open_at', 'reg_close_at', 'match_at', 'rules_text', 'status', 'is_published', 'updatedAt']))
+          (hasStaffRole(['super_admin', 'tournament_manager']) && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'slug', 'description', 'banner_image', 'game_mode', 'map_name', 'entry_fee', 'prize_pool', 'total_slots', 'available_slots', 'reg_open_at', 'reg_close_at', 'match_at', 'rules_text', 'status', 'is_published', 'updatedAt']))
           || (
             isVerifiedUser()
             && !isBlockedUser()
@@ -701,7 +702,9 @@ service cloud.firestore {
     // Match Results & Overall Leaderboard
     match /results/{resultId} {
       allow get: if isValidId(resultId);
-      allow list: if resource.data.rank >= 1;
+      allow list: if resource.data.rank >= 1
+        || (isVerifiedUser() && resource.data.user_id == request.auth.uid)
+        || isAdmin();
       allow create: if isValidId(resultId)
         && hasStaffRole(['super_admin', 'tournament_manager'])
         && isValidResult(incoming())
@@ -722,7 +725,7 @@ service cloud.firestore {
 
     match /leaderboard/{entryId} {
       allow get: if isValidId(entryId);
-      allow list: if resource.data.total_points >= 0;
+      allow list: if resource.data.total_points >= 0 || isAdmin();
       allow create: if isValidId(entryId)
         && hasStaffRole(['super_admin', 'tournament_manager'])
         && isValidLeaderboardEntry(incoming())

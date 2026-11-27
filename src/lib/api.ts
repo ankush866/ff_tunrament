@@ -596,9 +596,10 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     const tid = decodeURIComponent(resTourMatch[1]);
     const p = 'results';
     try {
-      const snap = await getDocs(query(collection(db, 'results'), where('tournament_id', '==', tid)));
+      const snap = await getDocs(query(collection(db, 'results'), where('rank', '>=', 1)));
       const results = snap.docs
         .map(serializeDoc)
+        .filter((r) => r.tournament_id === tid)
         .sort((a, b) => Number(a.rank || 0) - Number(b.rank || 0));
       return { results } as T;
     } catch (err) {
@@ -643,7 +644,7 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
   // ---------------------------------------------------------
   if (path === '/leaderboard' && method === 'GET') {
     try {
-      const snap = await getDocs(collection(db, 'leaderboard'));
+      const snap = await getDocs(query(collection(db, 'leaderboard'), where('total_points', '>=', 0)));
       const leaderboard = (snap.empty ? DEFAULT_LEADERBOARD : snap.docs.map(serializeDoc)).sort(
         (a, b) => Number(b.total_points || 0) - Number(a.total_points || 0)
       );
@@ -1033,7 +1034,9 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     try {
       const [uSnap, tSnap, pSnap, tktSnap] = await Promise.all([
         role === 'super_admin' ? getDocs(collection(db, 'users')) : Promise.resolve({ size: 0 } as any),
-        getDocs(collection(db, 'tournaments')),
+        isStaffRole(role, ['super_admin', 'tournament_manager'])
+          ? getDocs(collection(db, 'tournaments'))
+          : getDocs(query(collection(db, 'tournaments'), where('is_published', '==', 1))),
         isStaffRole(role, ['super_admin', 'payment_manager'])
           ? getDocs(collection(db, 'payments'))
           : Promise.resolve({ docs: [] } as any),
@@ -1159,7 +1162,11 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     requireAuthUid();
     const id = genId('match');
     try {
-      const totalSlots = Number(body.total_slots || 48);
+      const parsedSlots = Number(body.total_slots);
+      const totalSlots = Number.isFinite(parsedSlots)
+        ? Math.min(200, Math.max(2, Math.round(parsedSlots)))
+        : 48;
+      const availSlots = Math.min(totalSlots, Math.max(0, Number(body.available_slots ?? totalSlots)));
       const rawBanner = String(body.banner_image || '').trim();
       const banner = rawBanner
         ? await compressImageDataUrl(rawBanner, 960, 0.75)
@@ -1168,13 +1175,14 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
         id,
         title: sanitizeStr(body.title, 150),
         slug: slugify(body.title),
+        description: sanitizeStr(body.description || '', 2000),
         banner_image: banner,
         game_mode: body.game_mode || 'Solo',
         map_name: sanitizeStr(body.map_name || 'Bermuda', 64),
-        entry_fee: Number(body.entry_fee || 0),
-        prize_pool: Number(body.prize_pool || 0),
+        entry_fee: Math.max(0, Number(body.entry_fee || 0)),
+        prize_pool: Math.max(0, Number(body.prize_pool || 0)),
         total_slots: totalSlots,
-        available_slots: Number(body.available_slots ?? totalSlots),
+        available_slots: availSlots,
         reg_open_at: sanitizeStr(body.reg_open_at || new Date().toISOString(), 64),
         reg_close_at: sanitizeStr(body.reg_close_at || body.match_at, 64),
         match_at: sanitizeStr(body.match_at, 64),
@@ -1196,20 +1204,31 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     const tid = decodeURIComponent(adminTourMatch[1]);
     requireAuthUid();
     try {
-      const totalSlots = Number(body.total_slots || 48);
-      const availSlots = Math.min(totalSlots, Math.max(0, Number(body.available_slots ?? totalSlots)));
+      const parsedSlots = Number(body.total_slots);
+      const totalSlots = Number.isFinite(parsedSlots)
+        ? Math.min(200, Math.max(2, Math.round(parsedSlots)))
+        : 48;
+
+      const regsSnap = await getDocs(query(collection(db, 'registrations'), where('tournament_id', '==', tid)));
+      const activeJoinedCount = regsSnap.docs.filter((d) => d.data().payment_status !== 'rejected').length;
+      const availSlots = Math.max(0, totalSlots - activeJoinedCount);
+
       const rawBanner = String(body.banner_image || '').trim();
       const banner = rawBanner
         ? await compressImageDataUrl(rawBanner, 960, 0.75)
         : '';
-      await updateDoc(doc(db, 'tournaments', tid), {
+
+      const tRef = doc(db, 'tournaments', tid);
+      const tSnap = await getDoc(tRef);
+      const basePayload = {
         title: sanitizeStr(body.title, 150),
         slug: slugify(body.title),
+        description: sanitizeStr(body.description || '', 2000),
         banner_image: banner,
         game_mode: body.game_mode || 'Solo',
         map_name: sanitizeStr(body.map_name || 'Bermuda', 64),
-        entry_fee: Number(body.entry_fee || 0),
-        prize_pool: Number(body.prize_pool || 0),
+        entry_fee: Math.max(0, Number(body.entry_fee || 0)),
+        prize_pool: Math.max(0, Number(body.prize_pool || 0)),
         total_slots: totalSlots,
         available_slots: availSlots,
         reg_open_at: sanitizeStr(body.reg_open_at || '', 64),
@@ -1219,11 +1238,205 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
         status: body.status || 'Registration Open',
         is_published: Number(body.is_published ?? 1),
         updatedAt: serverTimestamp()
-      });
-      await logAdminAction('UPDATE_TOURNAMENT', `Updated match ${body.title}`);
-      return { success: true } as T;
+      };
+
+      if (tSnap.exists()) {
+        await updateDoc(tRef, basePayload);
+      } else {
+        await setDoc(tRef, {
+          id: tid,
+          ...basePayload,
+          createdAt: serverTimestamp()
+        });
+      }
+      await logAdminAction('UPDATE_TOURNAMENT', `Updated match ${body.title} (slots=${totalSlots}, avail=${availSlots})`);
+      return { success: true, total_slots: totalSlots, available_slots: availSlots } as T;
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tournaments/${tid}`);
+    }
+  }
+
+  const tourParticipantsMatch = path.match(/^\/admin\/tournaments\/([^/]+)\/participants$/);
+  if (tourParticipantsMatch && method === 'GET') {
+    const tid = decodeURIComponent(tourParticipantsMatch[1]);
+    requireAuthUid();
+    const role = await getCurrentRole();
+    if (!isStaffRole(role)) throw new Error('Staff permission required.');
+    try {
+      const [tSnap, regsSnap, resSnap] = await Promise.all([
+        getDoc(doc(db, 'tournaments', tid)),
+        getDocs(query(collection(db, 'registrations'), where('tournament_id', '==', tid))),
+        getDocs(query(collection(db, 'results'), where('tournament_id', '==', tid)))
+      ]);
+
+      const tournament = tSnap.exists()
+        ? serializeDoc(tSnap)
+        : DEFAULT_TOURNAMENTS.find((d) => d.id === tid) || null;
+
+      let paymentsList: any[] = [];
+      if (isStaffRole(role, ['super_admin', 'payment_manager'])) {
+        try {
+          const pSnap = await getDocs(query(collection(db, 'payments'), where('tournament_id', '==', tid)));
+          paymentsList = pSnap.docs.map(serializeDoc);
+        } catch {
+          paymentsList = [];
+        }
+      }
+
+      const regs = regsSnap.docs
+        .map(serializeDoc)
+        .sort((a, b) => Number(a.slot_number || 0) - Number(b.slot_number || 0));
+
+      const resultsList = resSnap.docs.map(serializeDoc);
+
+      const userIds = Array.from(new Set(regs.map((r) => String(r.user_id || '')).filter(Boolean)));
+      const userMap = new Map<string, any>();
+      await Promise.all(
+        userIds.map(async (uid) => {
+          try {
+            const uSnap = await getDoc(doc(db, 'users', uid));
+            const pub = uSnap.exists() ? serializeDoc(uSnap) : {};
+            let email = '';
+            let phone = '';
+            if (role === 'super_admin') {
+              try {
+                const privSnap = await getDoc(doc(db, 'users', uid, 'private', 'info'));
+                if (privSnap.exists()) {
+                  email = privSnap.data().email || '';
+                  phone = privSnap.data().phone || '';
+                }
+              } catch {
+                // Private PII restricted to super_admin
+              }
+            }
+            userMap.set(uid, { ...pub, email, phone });
+          } catch {
+            // Ignore unreadable user doc
+          }
+        })
+      );
+
+      const teamIds = Array.from(new Set(regs.map((r) => String(r.team_id || '')).filter(Boolean)));
+      const teamMap = new Map<string, any>();
+      await Promise.all(
+        teamIds.map(async (teamId) => {
+          try {
+            const teamSnap = await getDoc(doc(db, 'teams', teamId));
+            if (teamSnap.exists()) {
+              const td = serializeDoc(teamSnap);
+              const mUids: string[] = Array.isArray(td.member_uids) ? td.member_uids : [];
+              const members = await Promise.all(
+                mUids.map(async (mUid) => {
+                  let mu = userMap.get(mUid);
+                  if (!mu) {
+                    try {
+                      const mSnap = await getDoc(doc(db, 'users', mUid));
+                      mu = mSnap.exists() ? serializeDoc(mSnap) : {};
+                    } catch {
+                      mu = {};
+                    }
+                  }
+                  return {
+                    user_id: mUid,
+                    username: mu?.username || 'Player',
+                    free_fire_ign: mu?.free_fire_ign || mu?.username || 'Player',
+                    free_fire_uid: mu?.free_fire_uid || ''
+                  };
+                })
+              );
+              teamMap.set(teamId, { ...td, members });
+            }
+          } catch {
+            // Ignore team fetch failure
+          }
+        })
+      );
+
+      const participants = regs.map((reg) => {
+        const u = userMap.get(String(reg.user_id || '')) || {};
+        const matchedPayment =
+          paymentsList.find((p) => p.registration_id === reg.id) ||
+          paymentsList.find((p) => p.user_id === reg.user_id) ||
+          null;
+        const matchedResult =
+          resultsList.find((r) => r.user_id && r.user_id === reg.user_id) ||
+          resultsList.find(
+            (r) =>
+              String(r.player_name || '').trim().toLowerCase() ===
+              String(reg.free_fire_ign || u.free_fire_ign || reg.username || u.username || '')
+                .trim()
+                .toLowerCase()
+          ) ||
+          null;
+
+        return {
+          registration_id: reg.id,
+          tournament_id: reg.tournament_id,
+          user_id: reg.user_id,
+          slot_number: Number(reg.slot_number || 0),
+          username: reg.username || u.username || 'Player',
+          full_name: u.full_name || '',
+          free_fire_ign: reg.free_fire_ign || u.free_fire_ign || reg.username || u.username || 'Player',
+          free_fire_uid: reg.free_fire_uid || u.free_fire_uid || '',
+          avatar_url: u.avatar_url || '',
+          email: u.email || '',
+          phone: u.phone || '',
+          payment_status: reg.payment_status || 'pending',
+          rejection_reason: reg.rejection_reason || '',
+          registered_at: reg.created_at || '',
+          team_id: reg.team_id || '',
+          team: reg.team_id ? teamMap.get(String(reg.team_id)) || null : null,
+          payment: matchedPayment
+            ? {
+                id: matchedPayment.id,
+                amount: Number(matchedPayment.amount || 0),
+                transaction_ref: matchedPayment.transaction_ref || '',
+                whatsapp_number: matchedPayment.whatsapp_number || '',
+                screenshot_url: matchedPayment.screenshot_url || '',
+                status: matchedPayment.status || reg.payment_status,
+                verified_by_admin_name: matchedPayment.verified_by_admin_name || '',
+                verified_at: matchedPayment.verified_at || ''
+              }
+            : null,
+          result: matchedResult
+            ? {
+                id: matchedResult.id,
+                rank: Number(matchedResult.rank || 0),
+                kills: Number(matchedResult.kills || 0),
+                placement_points: Number(matchedResult.placement_points || 0),
+                total_points: Number(matchedResult.total_points || 0),
+                prize_amount: Number(matchedResult.prize_amount || 0),
+                notes: matchedResult.notes || ''
+              }
+            : null
+        };
+      });
+
+      const approvedCount = participants.filter((p) => p.payment_status === 'approved').length;
+      const pendingCount = participants.filter((p) => p.payment_status === 'pending').length;
+      const rejectedCount = participants.filter((p) => p.payment_status === 'rejected').length;
+      const joinedCount = approvedCount + pendingCount;
+      const totalRevenue = paymentsList
+        .filter((p) => p.status === 'approved')
+        .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+      return {
+        tournament,
+        participants,
+        results: resultsList.sort((a, b) => Number(a.rank || 0) - Number(b.rank || 0)),
+        summary: {
+          totalSlots: Number(tournament?.total_slots || 0),
+          availableSlots: Number(tournament?.available_slots || 0),
+          joinedCount,
+          approvedCount,
+          pendingCount,
+          rejectedCount,
+          rankedCount: resultsList.length,
+          totalRevenue
+        }
+      } as T;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.LIST, `admin/tournaments/${tid}/participants`);
     }
   }
 
@@ -1415,38 +1628,134 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     const tid = decodeURIComponent(adminResultsMatch[1]);
     requireAuthUid();
     try {
-      const existingSnap = await getDocs(query(collection(db, 'results'), where('tournament_id', '==', tid)));
+      const [existingSnap, tSnap] = await Promise.all([
+        getDocs(query(collection(db, 'results'), where('tournament_id', '==', tid))),
+        getDoc(doc(db, 'tournaments', tid))
+      ]);
+      const tTitle = tSnap.exists() ? String(tSnap.data().title || 'Match') : 'Match';
+      const affectedUserIds = new Set<string>();
+      existingSnap.docs.forEach((d) => {
+        const uid = String(d.data().user_id || '').trim();
+        if (uid) affectedUserIds.add(uid);
+      });
+
+      const validEntries = (body.entries || []).filter(
+        (entry: any) => String(entry?.player_name || '').trim() || String(entry?.user_id || '').trim()
+      );
+
       const batch = writeBatch(db);
       existingSnap.docs.forEach((d) => batch.delete(d.ref));
 
-      for (const entry of body.entries || []) {
+      const notifiedUsers = new Set<string>();
+      for (const entry of validEntries) {
         const rId = genId('res');
-        const kills = Number(entry.kills || 0);
-        const placePts = Number(entry.placement_points || 0);
+        const userId = sanitizeStr(entry.user_id || '', 128).trim();
+        if (userId) affectedUserIds.add(userId);
+        const rank = Math.min(200, Math.max(1, Math.round(Number(entry.rank || 1))));
+        const kills = Math.max(0, Number(entry.kills || 0));
+        const placePts = Math.max(0, Number(entry.placement_points || 0));
+        const totalPts = Math.max(0, Number(entry.total_points ?? kills + placePts));
+        const prizeAmt = Math.max(0, Number(entry.prize_amount || 0));
+        const playerName = sanitizeStr(entry.player_name || 'Winner', 100) || 'Winner';
+
         batch.set(doc(db, 'results', rId), {
           id: rId,
           tournament_id: tid,
-          rank: Number(entry.rank || 1),
-          user_id: sanitizeStr(entry.user_id || '', 128),
-          player_name: sanitizeStr(entry.player_name || 'Winner', 100),
+          rank,
+          user_id: userId,
+          player_name: playerName,
           kills,
           placement_points: placePts,
           kill_points: kills,
-          total_points: Number(entry.total_points ?? kills + placePts),
-          prize_amount: Number(entry.prize_amount || 0),
+          total_points: totalPts,
+          prize_amount: prizeAmt,
           notes: sanitizeStr(entry.notes || '', 500),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+
+        if (userId && !notifiedUsers.has(userId)) {
+          notifiedUsers.add(userId);
+          const nid = genId('notif');
+          const prizeNote = prizeAmt > 0 ? ` Prize won: ₹${prizeAmt}.` : '';
+          batch.set(doc(db, 'notifications', nid), {
+            id: nid,
+            user_id: userId,
+            title: rank === 1 ? `Booyah! Rank #1 in ${sanitizeStr(tTitle, 70)}` : `Rank #${rank} Assigned`,
+            message: `You finished Rank #${rank} (${kills} kills, ${totalPts} pts) in ${sanitizeStr(tTitle, 90)}.${prizeNote}`,
+            type: 'tournament',
+            is_read: 0,
+            link_url: `/tournament/${tid}`,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
       }
 
-      batch.update(doc(db, 'tournaments', tid), {
-        status: 'Completed',
-        updatedAt: serverTimestamp()
-      });
+      const nextStatus =
+        body.tournament_status && ['Upcoming', 'Registration Open', 'Live', 'Completed', 'Cancelled'].includes(body.tournament_status)
+          ? body.tournament_status
+          : 'Completed';
+      if (tSnap.exists()) {
+        batch.update(doc(db, 'tournaments', tid), {
+          status: nextStatus,
+          updatedAt: serverTimestamp()
+        });
+      }
       await batch.commit();
-      await logAdminAction('PUBLISH_RESULTS', `Published results for match ${tid}`);
-      return { success: true } as T;
+
+      // Sync overall leaderboard stats for all affected registered players
+      for (const uid of affectedUserIds) {
+        try {
+          const [uResSnap, uSnap] = await Promise.all([
+            getDocs(query(collection(db, 'results'), where('user_id', '==', uid))),
+            getDoc(doc(db, 'users', uid))
+          ]);
+          const uData = uSnap.exists() ? uSnap.data() : {};
+          const uResults = uResSnap.docs.map((d) => d.data());
+          const lbId = `lb_${uid.replace(/[^a-zA-Z0-9_-]/g, '')}`.slice(0, 120);
+          const lbRef = doc(db, 'leaderboard', lbId);
+          const lbSnap = await getDoc(lbRef);
+
+          const totalMatches = uResults.length;
+          const wins = uResults.filter((r) => Number(r.rank) === 1).length;
+          const totalKills = uResults.reduce((s, r) => s + Number(r.kills || 0), 0);
+          const totalPoints = uResults.reduce((s, r) => s + Number(r.total_points || 0), 0);
+          const totalEarnings = uResults.reduce((s, r) => s + Number(r.prize_amount || 0), 0);
+          const fallbackName = uResults[0]?.player_name || 'Player';
+          const playerName = sanitizeStr(uData.username || uData.full_name || fallbackName, 100) || 'Player';
+          const ign = sanitizeStr(uData.free_fire_ign || fallbackName, 64);
+          const avatarUrl = sanitizeStr(uData.avatar_url || '', 350000);
+
+          const lbPayload = {
+            user_id: uid,
+            player_name: playerName,
+            free_fire_ign: ign,
+            avatar_url: avatarUrl,
+            total_matches: totalMatches,
+            wins,
+            total_kills: totalKills,
+            total_points: Math.max(0, totalPoints),
+            total_earnings: Math.max(0, totalEarnings),
+            updatedAt: serverTimestamp()
+          };
+
+          if (lbSnap.exists()) {
+            await updateDoc(lbRef, lbPayload);
+          } else if (totalMatches > 0) {
+            await setDoc(lbRef, {
+              id: lbId,
+              ...lbPayload,
+              createdAt: serverTimestamp()
+            });
+          }
+        } catch {
+          // Non-blocking leaderboard sync
+        }
+      }
+
+      await logAdminAction('PUBLISH_RESULTS', `Published ${validEntries.length} ranked results for match ${tid}`);
+      return { success: true, savedCount: validEntries.length } as T;
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `results/${tid}`);
     }
