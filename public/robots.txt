@@ -14,4 +14,4 @@ Disallow: /wallet
 Disallow: /api
 Disallow: /login
 
-Sitemap: https://vlexa.free.nf/sitemap.xml
+Sitemap: https://ff-tunrament-4.onrender.com/sitemap.xml

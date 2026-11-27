@@ -2,6 +2,7 @@ import { formatINR, formatISTDateTime } from './api.js';
 import { DEFAULT_MATCH_BANNER, getSafeImageUrl } from './assets.js';
 
 export const DEFAULT_SITE_URL = 'https://vlexa.free.nf';
+export const CANONICAL_SITE_URL = 'https://ff-tunrament-4.onrender.com';
 export const DEFAULT_SEO_TITLE = 'Vlexa – Free Fire Tournament Platform';
 export const DEFAULT_SEO_DESCRIPTION =
   'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings.';
@@ -55,13 +56,26 @@ function removeMetaTag(attrName: 'name' | 'property', attrValue: string): void {
 
 function upsertCanonical(href: string): void {
   if (typeof document === 'undefined') return;
-  let link = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+  const existing = Array.from(
+    document.head.querySelectorAll<HTMLLinkElement>('link[rel="canonical"]')
+  );
+  let link = existing[0] ?? null;
+  for (let i = 1; i < existing.length; i++) {
+    existing[i].remove();
+  }
   if (!link) {
     link = document.createElement('link');
     link.setAttribute('rel', 'canonical');
     document.head.appendChild(link);
   }
   link.setAttribute('href', href);
+}
+
+function removeCanonical(): void {
+  if (typeof document === 'undefined') return;
+  document.head
+    .querySelectorAll<HTMLLinkElement>('link[rel="canonical"]')
+    .forEach(el => el.remove());
 }
 
 function upsertJsonLd(id: string, payload: Record<string, unknown> | null): void {
@@ -93,7 +107,12 @@ function resolveAbsoluteImageUrl(rawBanner?: string | null): string | null {
 
 export function applyPublicPageSeo(view: string, params: Record<string, any> = {}): void {
   if (typeof document === 'undefined') return;
-  if (view === 'tournament-detail') return;
+  if (view === 'tournament-detail') {
+    if (params?.id !== undefined && params?.id !== null && String(params.id).trim() !== '') {
+      upsertCanonical(`${CANONICAL_SITE_URL}/tournament/${String(params.id).trim()}`);
+    }
+    return;
+  }
 
   const origin = getCanonicalOrigin();
   let title = DEFAULT_SEO_TITLE;
@@ -171,8 +190,12 @@ export function applyPublicPageSeo(view: string, params: Record<string, any> = {
   upsertMetaTag('name', 'twitter:title', title);
   upsertMetaTag('name', 'twitter:description', description);
 
+  const canonicalHref = `${CANONICAL_SITE_URL}${path}`;
+
   if (!isPrivate) {
-    upsertCanonical(canonicalUrl);
+    upsertCanonical(canonicalHref);
+  } else {
+    removeCanonical();
   }
 }
 
@@ -238,7 +261,7 @@ export function injectTournamentSeo(
   upsertMetaTag('name', 'twitter:title', title);
   upsertMetaTag('name', 'twitter:description', description);
 
-  upsertCanonical(canonicalUrl);
+  upsertCanonical(`${CANONICAL_SITE_URL}/tournament/${tournament.id}`);
 
   const totalSlots = Number(tournament.total_slots || 48);
   const availableSlots =
@@ -306,6 +329,6 @@ export function resetDefaultSeo(): void {
   upsertMetaTag('name', 'twitter:title', DEFAULT_SEO_TITLE);
   upsertMetaTag('name', 'twitter:description', DEFAULT_SEO_DESCRIPTION);
   removeMetaTag('name', 'twitter:image');
-  upsertCanonical(`${origin}/`);
+  upsertCanonical(`${CANONICAL_SITE_URL}/`);
   upsertJsonLd(JSON_LD_SCRIPT_ID, null);
 }
