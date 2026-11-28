@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { HelpCircle, Send, Phone, Mail } from 'lucide-react';
 import { apiRequest } from '../lib/api.js';
+import { sanitizeVlexaSeoText } from '../lib/seo.js';
 
 interface FooterProps {
   onNavigate: (view: string, params?: any) => void;
@@ -154,8 +155,8 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3 text-center md:text-left">
           <span>
             {settings.footer_text && !/flaxy/i.test(settings.footer_text)
-              ? settings.footer_text
-              : '© 2026 Vlexa. All rights reserved. Founded & Developed by Ankush Kumar.'}
+              ? sanitizeVlexaSeoText(settings.footer_text)
+              : '© 2026 Vlexa. All rights reserved. Founded & Developed by Ankush Sharma.'}
           </span>
           <a
             href="/about"

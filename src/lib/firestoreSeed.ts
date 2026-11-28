@@ -12,7 +12,7 @@ export const DEFAULT_SITE_SETTINGS: Record<string, string> = {
     'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3Dflaxy.esports%40icici%26pn%3DFlaxy%2520Esports%26cu%3DINR',
   site_tagline: 'Vlexa – Free Fire Tournament Management Platform',
   site_description:
-    'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings.',
+    'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Sharma, featuring competitive matches, live room schedules & rankings.',
   site_logo: '',
   default_timezone: 'Asia/Kolkata',
   maintenance_mode: 'false',
@@ -23,12 +23,12 @@ export const DEFAULT_SITE_SETTINGS: Record<string, string> = {
   scoring_rules:
     '{"placement_points":{"1":12,"2":9,"3":8,"4":7,"5":6,"6":5,"7":4,"8":3,"9":2,"10":1},"kill_point":1}',
   footer_text:
-    '© 2026 Vlexa. All rights reserved. Founded & Developed by Ankush Kumar. Free Fire is a registered trademark of Garena.',
+    '© 2026 Vlexa. All rights reserved. Founded & Developed by Ankush Sharma. Free Fire is a registered trademark of Garena.',
   social_instagram: '',
   social_youtube: '',
   social_discord: '',
   social_telegram: '',
-  founder_name: 'Ankush Kumar',
+  founder_name: 'Ankush Sharma',
   founder_role: 'Founder & Developer of Vlexa',
   founder_profession: 'Self-taught Aspiring Full-Stack Developer',
   founder_bio:
@@ -217,7 +217,7 @@ export const DEFAULT_PAGES = [
     id: '1',
     title: 'About Us',
     slug: 'about-us',
-    content: '<h2>Welcome to Vlexa</h2><p>Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.</p>',
+    content: '<h2>Welcome to Vlexa</h2><p>Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Sharma.</p>',
     meta_title: 'About Vlexa – Free Fire Tournament Platform',
     meta_description: 'About Vlexa, an independently developed Free Fire competitive tournament platform.',
     is_published: 1,

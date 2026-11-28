@@ -137,12 +137,13 @@ function sanitizeLegacyBrandText(text: string): string {
     .replace(/\bFLAXY\s+ESPORTS\s+TOURNAMENTS\b/gi, 'Vlexa')
     .replace(/\bFlaxy\s+Esports\b/gi, 'Vlexa')
     .replace(/\bFlaxy\b/gi, 'Vlexa')
+    .replace(/\bAnkush\s+Kumar\b/gi, 'Ankush Sharma')
     .replace(/https?:\/\/vlexa\.free\.nf\/?/gi, 'https://ff-tunrament-4.onrender.com/');
 }
 
 function sanitizePublicSettingsOutput(settings: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = { ...settings };
-  const textKeys = ['site_name', 'site_tagline', 'site_description', 'footer_text', 'founder_role', 'founder_bio', 'founder_website'];
+  const textKeys = ['site_name', 'site_tagline', 'site_description', 'footer_text', 'founder_name', 'founder_role', 'founder_bio', 'founder_website'];
   for (const key of textKeys) {
     if (typeof out[key] === 'string' && out[key]) {
       out[key] = sanitizeLegacyBrandText(out[key]);

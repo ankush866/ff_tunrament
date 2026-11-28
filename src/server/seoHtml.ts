@@ -36,7 +36,7 @@ const PUBLIC_NAV_HTML = `
 
 const PUBLIC_FOOTER_HTML = `
   <footer>
-    <p>© 2026 Vlexa. All rights reserved. Founded &amp; Developed by <a href="/about">Ankush Kumar</a>.</p>
+    <p>© 2026 Vlexa. All rights reserved. Founded &amp; Developed by <a href="/about">Ankush Sharma</a>.</p>
     <p>
       <a href="/about">About the Founder</a> |
       <a href="/page/tournament-rules">Tournament Rules</a> |
@@ -52,7 +52,7 @@ const PAGE_DESCRIPTIONS: Record<string, { title: string; h1: string; description
     title: 'About Vlexa – Free Fire Tournament Platform',
     h1: 'About Vlexa',
     description: 'Learn about Vlexa, an independently developed Free Fire Tournament Management Platform.',
-    body: '<p>Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by <a href="/about">Ankush Kumar</a>.</p>'
+    body: '<p>Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by <a href="/about">Ankush Sharma</a>.</p>'
   },
   'contact-us': {
     title: 'Contact Support | Vlexa',
@@ -115,9 +115,9 @@ function getRouteSeoSpec(rawPath: string): RouteSeoSpec {
   }
 
   if (cleanPath === '/about') {
-    const title = 'About Ankush Kumar – Founder & Developer of Vlexa';
+    const title = 'About Ankush Sharma – Founder & Developer of Vlexa';
     const description =
-      'Ankush Kumar is a Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.';
+      'Ankush Sharma is a Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.';
     return {
       isPrivate: false,
       canonicalPath: '/about',
@@ -143,13 +143,13 @@ function getRouteSeoSpec(rawPath: string): RouteSeoSpec {
         <main>
           <section aria-labelledby="about-founder-heading">
             <p>About the Founder</p>
-            <h1 id="about-founder-heading">Ankush Kumar</h1>
+            <h1 id="about-founder-heading">Ankush Sharma</h1>
             <p>Founder &amp; Developer of Vlexa · Self-taught Aspiring Full-Stack Developer</p>
-            <p><strong>Ankush Kumar</strong> is a <strong>Self-taught Aspiring Full-Stack Developer</strong> and the <strong>Founder &amp; Developer of Vlexa</strong>.</p>
+            <p><strong>Ankush Sharma</strong> is a <strong>Self-taught Aspiring Full-Stack Developer</strong> and the <strong>Founder &amp; Developer of Vlexa</strong>.</p>
             <p>Vlexa is an independently developed Free Fire Tournament Management Platform created to give mobile esports players a structured, transparent arena for competitive Solo, Duo, and Squad matches, live room scheduling, slot tracking, and match results.</p>
             <h2>Official Profiles</h2>
             <ul>
-              <li><a href="https://www.linkedin.com/in/ankush-sharma-4a9911414/" rel="noopener noreferrer">LinkedIn – Ankush Kumar</a></li>
+              <li><a href="https://www.linkedin.com/in/ankush-sharma-4a9911414/" rel="noopener noreferrer">LinkedIn – Ankush Sharma</a></li>
               <li><a href="https://github.com/ankush866" rel="noopener noreferrer">GitHub – @ankush866</a></li>
               <li><a href="${SITE_URL}/">Vlexa – Official Platform</a></li>
             </ul>
@@ -251,7 +251,7 @@ function getRouteSeoSpec(rawPath: string): RouteSeoSpec {
     const title = info ? info.title : `${escapeHtml(rawSlug.replace(/-/g, ' '))} | Vlexa`;
     const description = info
       ? info.description
-      : 'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.';
+      : 'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Sharma.';
     const h1 = info ? info.h1 : escapeHtml(rawSlug.replace(/-/g, ' '));
     const body = info ? info.body : `<p>${escapeHtml(description)}</p>`;
     return {
@@ -300,7 +300,7 @@ function getRouteSeoSpec(rawPath: string): RouteSeoSpec {
   // Homepage fallback (`/`)
   const homeTitle = 'Vlexa – Free Fire Tournament Platform';
   const homeDescription =
-    'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings.';
+    'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Sharma, featuring competitive matches, live room schedules & rankings.';
   return {
     isPrivate: false,
     canonicalPath: '/',
@@ -312,7 +312,7 @@ function getRouteSeoSpec(rawPath: string): RouteSeoSpec {
       <main>
         <section>
           <h1>Compete &amp; Win in Free Fire Arena</h1>
-          <p>Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by <a href="/about">Ankush Kumar</a>. Join daily Solo, Duo &amp; Squad matches with transparent room scheduling and live rankings.</p>
+          <p>Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by <a href="/about">Ankush Sharma</a>. Join daily Solo, Duo &amp; Squad matches with transparent room scheduling and live rankings.</p>
           <p><a href="/tournaments">Join Live Matches</a> | <a href="/live-rooms">Live Room ID</a> | <a href="/about">About the Founder</a></p>
         </section>
         <section>
@@ -321,7 +321,7 @@ function getRouteSeoSpec(rawPath: string): RouteSeoSpec {
           <h2>Fast UPI &amp; Rooms</h2>
           <p>Quick UPI verification and scheduled Room ID &amp; Password unlock.</p>
           <h2>Founder &amp; Developer</h2>
-          <p>Independently developed by <a href="/about">Ankush Kumar</a> (<a href="https://github.com/ankush866" rel="noopener noreferrer">GitHub</a> · <a href="https://www.linkedin.com/in/ankush-sharma-4a9911414/" rel="noopener noreferrer">LinkedIn</a>).</p>
+          <p>Independently developed by <a href="/about">Ankush Sharma</a> (<a href="https://github.com/ankush866" rel="noopener noreferrer">GitHub</a> · <a href="https://www.linkedin.com/in/ankush-sharma-4a9911414/" rel="noopener noreferrer">LinkedIn</a>).</p>
         </section>
       </main>
       ${PUBLIC_FOOTER_HTML}

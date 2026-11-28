@@ -2738,7 +2738,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onNavigate, onOp
                         type="text"
                         value={settings.founder_name || ''}
                         onChange={e => setSettings(prev => ({ ...prev, founder_name: e.target.value }))}
-                        placeholder="Ankush Kumar"
+                        placeholder="Ankush Sharma"
                         className={inputCls}
                       />
                     </div>

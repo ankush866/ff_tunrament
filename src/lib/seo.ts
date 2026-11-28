@@ -10,7 +10,7 @@ export const DEFAULT_LOGO_URL = `${DEFAULT_SITE_URL}/vlexa-logo.svg`;
 
 export const DEFAULT_SEO_TITLE = 'Vlexa – Free Fire Tournament Platform';
 export const DEFAULT_SEO_DESCRIPTION =
-  'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar, featuring competitive matches, live room schedules & rankings.';
+  'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Sharma, featuring competitive matches, live room schedules & rankings.';
 
 export interface TournamentSeoData {
   id: string | number;
@@ -42,6 +42,7 @@ export function sanitizeVlexaSeoText(text: string): string {
     .replace(/\bFlaxy\s+Esports\s+Tournaments\b/gi, 'Vlexa')
     .replace(/\bFlaxy\s+Esports\b/gi, 'Vlexa')
     .replace(/\bFlaxy\b/gi, 'Vlexa')
+    .replace(/\bAnkush\s+Kumar\b/gi, 'Ankush Sharma')
     .replace(/https?:\/\/vlexa\.free\.nf\/?/gi, `${DEFAULT_SITE_URL}/`);
 }
 
@@ -141,7 +142,7 @@ export function syncEntityGraphJsonLd(options?: {
   const personNode: Record<string, unknown> = {
     '@type': 'Person',
     '@id': FOUNDER_ID,
-    name: 'Ankush Kumar',
+    name: 'Ankush Sharma',
     jobTitle: 'Founder & Developer',
     description:
       'Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.',
@@ -171,7 +172,7 @@ export function syncEntityGraphJsonLd(options?: {
         name: 'Vlexa',
         url: `${DEFAULT_SITE_URL}/`,
         description:
-          'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.',
+          'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Sharma.',
         logo: {
           '@type': 'ImageObject',
           url: logoUrl
@@ -186,7 +187,7 @@ export function syncEntityGraphJsonLd(options?: {
         name: 'Vlexa',
         url: `${DEFAULT_SITE_URL}/`,
         description:
-          'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Kumar.',
+          'Vlexa is an independently developed Free Fire Tournament Management Platform founded and developed by Ankush Sharma.',
         publisher: {
           '@id': ORGANIZATION_ID
         },
@@ -216,9 +217,9 @@ export function applyPublicPageSeo(view: string, params: Record<string, any> = {
   let isPrivate = false;
 
   if (view === 'about') {
-    title = 'About Ankush Kumar – Founder & Developer of Vlexa';
+    title = 'About Ankush Sharma – Founder & Developer of Vlexa';
     description =
-      'Ankush Kumar is a Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.';
+      'Ankush Sharma is a Self-taught Aspiring Full-Stack Developer and Founder & Developer of Vlexa, an independently developed Free Fire Tournament Management Platform.';
     path = '/about';
   } else if (view === 'tournaments') {
     title = 'Free Fire Tournaments & Matches | Vlexa';
@@ -315,7 +316,7 @@ export function applyPublicPageSeo(view: string, params: Record<string, any> = {
       '@type': 'ProfilePage',
       '@id': `${DEFAULT_SITE_URL}/about#profilepage`,
       url: `${DEFAULT_SITE_URL}/about`,
-      name: 'About Ankush Kumar – Founder & Developer of Vlexa',
+      name: 'About Ankush Sharma – Founder & Developer of Vlexa',
       description,
       isPartOf: {
         '@id': WEBSITE_ID
