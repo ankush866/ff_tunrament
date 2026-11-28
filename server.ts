@@ -154,7 +154,7 @@ async function startServer() {
   app.use('/api', apiRouter);
 
   const isHtmlRouteRequest = (req: Request): boolean => {
-    if (req.method !== 'GET') return false;
+    if (req.method !== 'GET' && req.method !== 'HEAD') return false;
     const p = req.path || '/';
     if (
       p.startsWith('/api') ||
@@ -189,7 +189,11 @@ async function startServer() {
         const rawHtml = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
         const transformed = await vite.transformIndexHtml(req.originalUrl, rawHtml);
         const seoHtml = applyServerSeoToHtml(transformed, req.path);
-        res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').send(seoHtml);
+        res
+          .status(200)
+          .setHeader('Content-Type', 'text/html; charset=utf-8')
+          .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+          .send(seoHtml);
       } catch (err) {
         next(err);
       }
@@ -197,19 +201,92 @@ async function startServer() {
   } else {
     // Production mode (index: false so `/` also receives route-specific SEO & crawler HTML)
     const distDir = path.resolve(__dirname, 'dist');
+    const distAssetsDir = path.resolve(distDir, 'assets');
     const distIndexPath = path.resolve(distDir, 'index.html');
-    const distTemplate = fs.existsSync(distIndexPath) ? fs.readFileSync(distIndexPath, 'utf-8') : '';
+    let cachedTemplate = '';
+    let cachedTemplateMtime = -1;
 
-    app.use(express.static(distDir, { index: false }));
+    const getDistTemplate = (): string => {
+      try {
+        if (!fs.existsSync(distIndexPath)) return '';
+        const stat = fs.statSync(distIndexPath);
+        if (stat.mtimeMs !== cachedTemplateMtime || !cachedTemplate) {
+          cachedTemplate = fs.readFileSync(distIndexPath, 'utf-8');
+          cachedTemplateMtime = stat.mtimeMs;
+        }
+        return cachedTemplate;
+      } catch {
+        return cachedTemplate;
+      }
+    };
+
+    // Serve Vite content-hashed assets with strict MIME types and immutable caching
+    app.use(
+      '/assets',
+      express.static(distAssetsDir, {
+        fallthrough: true,
+        maxAge: '1y',
+        immutable: true,
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+          } else if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+          } else if (filePath.endsWith('.svg')) {
+            res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+          }
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+        }
+      })
+    );
+
+    // Never fall back missing /assets/* requests to index.html (prevents 200 text/html MIME errors)
+    app.use('/assets', (_req: Request, res: Response) => {
+      res
+        .status(404)
+        .setHeader('Cache-Control', 'no-store')
+        .setHeader('Content-Type', 'text/plain; charset=utf-8')
+        .send('Asset not found');
+    });
+
+    app.use(
+      express.static(distDir, {
+        index: false,
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          } else if (filePath.endsWith('.svg')) {
+            res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+          } else if (filePath.endsWith('.xml')) {
+            res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+          }
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+        }
+      })
+    );
+
     app.get('*', (req: Request, res: Response) => {
-      const template =
-        distTemplate || (fs.existsSync(distIndexPath) ? fs.readFileSync(distIndexPath, 'utf-8') : '');
+      if (!isHtmlRouteRequest(req)) {
+        res
+          .status(404)
+          .setHeader('Cache-Control', 'no-store')
+          .setHeader('Content-Type', 'text/plain; charset=utf-8')
+          .send('Not found');
+        return;
+      }
+      const template = getDistTemplate();
       if (!template) {
         res.status(404).send('Build output not found.');
         return;
       }
       const seoHtml = applyServerSeoToHtml(template, req.path);
-      res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').send(seoHtml);
+      res
+        .status(200)
+        .setHeader('Content-Type', 'text/html; charset=utf-8')
+        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+        .setHeader('Pragma', 'no-cache')
+        .setHeader('Expires', '0')
+        .send(seoHtml);
     });
   }
 
